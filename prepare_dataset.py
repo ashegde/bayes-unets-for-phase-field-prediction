@@ -54,6 +54,8 @@ for mode in experiments.keys():
             
             # Create a group in the HDF5 file for this run
             run_group = h5f.create_group(f'run_{ii}')
-            run_group.create_dataset('field', data=u)  # Store the concentration field
+            run_group.create_dataset('x_coordinates', data=simulator.X)
+            run_group.create_dataset('y_coordinates', data=simulator.Y)
+            run_group.create_dataset('field_values', data=u)  # Store the concentration field
             run_group.create_dataset('time', data=t)    # Store the time values
             run_group.create_dataset('length', data=len(t))

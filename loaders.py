@@ -123,11 +123,11 @@ class H5Dataset(Dataset):
 
         # Load the field data for the current time step and the subsequent time step (after skipping `skip` steps)
         field_data = torch.from_numpy(
-            self.h5f[self.group_names[group_id]]['field'][index_within_group]
+            self.h5f[self.group_names[group_id]]['field_values'][index_within_group]
         ).to(self.dtype)
 
         next_field_data = torch.from_numpy(
-            self.h5f[self.group_names[group_id]]['field'][index_within_group + self.skip]
+            self.h5f[self.group_names[group_id]]['field_values'][index_within_group + self.skip]
         ).to(self.dtype)
 
         return field_data, next_field_data
@@ -140,3 +140,27 @@ class H5Dataset(Dataset):
         is properly closed, releasing any held resources.
         """
         self.h5f.close()
+
+    def get_meshgrid(self, group_id: int = 0) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Returns the X and Y grid coordinates of the field values.
+
+        Returns
+        -------
+        Tuple[torch.Tensor, torch.Tensor]
+            A tuple containing two tensors:
+            - X: Tensor of x-coordinates.
+            - Y: Tensor of y-coordinates.
+
+        Note
+        ------
+        For simplicity, we assume that the coordinate grids are identical across runs / groups
+        """
+        x_grid = torch.from_numpy(
+            self.h5f[self.group_names[group_id]]['x_coordinates'][:],
+        ).to(self.dtype)
+
+        y_grid = torch.from_numpy(
+            self.h5f[self.group_names[group_id]]['y_coordinates'][:],
+        ).to(self.dtype)
+        return x_grid, y_grid
