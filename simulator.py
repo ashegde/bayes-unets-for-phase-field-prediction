@@ -175,7 +175,7 @@ class CahnHilliardSimulator:
         """
         if self.u is None:
             raise ValueError('Field u not initialized!')
-        fu = self.f(self.u)
+        fu = self.free_energy_deriv(self.u)
         hat_u = dct2(np.real(self.u))
         df = dct2(np.real(fu))
         hat_u = (hat_u + self.dt * self.Leig * df) / self.CHeig
