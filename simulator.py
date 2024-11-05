@@ -64,7 +64,7 @@ class CahnHilliardSimulator:
     Attributes:
     -----------
     u : np.ndarray
-        The current state of the system (concentration field).
+        The current state of the system (concentration field or order parameter).
     x_res : int
         The resolution of the grid in the x-direction.
     y_res : int
@@ -73,8 +73,6 @@ class CahnHilliardSimulator:
         The current time of the simulation.
     dt : float
         The time step for the simulation.
-    f : callable
-        The free energy functional derivative.
     X : np.ndarray
         Meshgrid for x-coordinates.
     Y : np.ndarray
@@ -126,6 +124,22 @@ class CahnHilliardSimulator:
         self.X, self.Y = np.meshgrid(x, y, indexing='ij')  # X, Y are (M, N)
         self.Leig = -(np.tile((xp**2), (y_res, 1)).T + np.tile(yq**2, (x_res, 1))) * (np.pi**2)
         self.CHeig = np.ones((x_res, y_res)) - 2 * self.dt * self.Leig + self.dt * (epsilon**2) * (self.Leig**2)
+
+    def free_energy_deriv(self, u: np.ndarray) -> np.ndarray:
+        """
+        Derivative of the free energy functional.
+
+        Parameters:
+        -----------
+        u : np.ndarray
+            Concentration field
+
+        Returns:
+        --------
+        np.ndarray
+            Free energy functional derivative 
+        """
+        return u**3 - 3*u
 
     def initialize(self, u: np.ndarray):
         """
