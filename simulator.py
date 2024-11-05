@@ -120,7 +120,6 @@ class CahnHilliardSimulator:
         self.y_res = y_res
         self.t = 0.0
         self.dt = dt
-        self.f = lambda a: a**3 - 3 * a
         self.X, self.Y = np.meshgrid(x, y, indexing='ij')  # X, Y are (M, N)
         self.Leig = -(np.tile((xp**2), (y_res, 1)).T + np.tile(yq**2, (x_res, 1))) * (np.pi**2)
         self.CHeig = np.ones((x_res, y_res)) - 2 * self.dt * self.Leig + self.dt * (epsilon**2) * (self.Leig**2)
