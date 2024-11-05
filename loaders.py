@@ -72,7 +72,7 @@ class H5Dataset(Dataset):
 
         # Compute the cumulative sum of the number of time steps per group, considering the skip factor
         self.group_boundaries = np.cumsum(
-            [0.0] + [
+            [0] + [
                 len(self.h5f[group_name]['time'][:]) - self.skip for group_name in self.group_names
             ]
         )
