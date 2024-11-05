@@ -107,12 +107,20 @@ class CahnHilliardSimulator:
         y_right = 2
         x_res = 32
         y_res = 32
-        x = np.linspace(0.5 * x_right / x_res, x_right - 0.5 * x_right / x_res, x_res)
-        y = np.linspace(0.5 * y_right / y_res, y_right - 0.5 * y_right / y_res, y_res)
+        x = np.linspace(
+            0.5*x_right/x_res,
+            x_right-0.5*x_right/x_res,
+            x_res,
+        )
+        y = np.linspace(
+            0.5*y_right/y_res,
+            y_right-0.5*y_right/y_res,
+            y_res,
+        )
         h = x[1] - x[0]
-        epsilon = 4 * h / (2 * np.sqrt(2) * np.arctanh(0.9))
-        xp = np.linspace(0, (x_res - 1) / x_right, x_res)
-        yq = np.linspace(0, (y_res - 1) / y_right, y_res)
+        epsilon = 4*h / (2*np.sqrt(2)*np.arctanh(0.9))
+        xp = np.linspace(0, (x_res-1)/x_right, x_res)
+        yq = np.linspace(0, (y_res-1)/y_right, y_res)
 
         # Stored variables
         self.u = None

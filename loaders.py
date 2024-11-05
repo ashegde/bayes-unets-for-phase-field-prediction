@@ -7,104 +7,136 @@ import h5py
 
 class H5Dataset(Dataset):
     """
-    Base HDF5 Cahn-Hilliard Dataset.
+    A dataset class for loading Cahn-Hilliard simulation data stored in HDF5 format.
 
-    This dataset class loads Cahn-Hilliard simulation data stored in HDF5 format.
-    It provides functionality to access simulation fields and time values for training,
-    validation, or testing purposes.
+    This dataset provides functionality for loading simulation data fields and corresponding
+    time values. It is used for training, validation, or testing machine learning models
+    on simulation data, specifically for problems like the Cahn-Hilliard equation.
 
-    Attributes:
+    Attributes
     ----------
     path : str
         Path to the directory containing the HDF5 data files.
     skip : int
-        Number of time steps to skip when retrieving data.
+        The number of time steps to skip when retrieving data.
     mode : str
-        Specifies which dataset to load: 'train', 'valid', or 'test'.
+        Specifies which subset of data to load: 'train', 'valid', or 'test'.
     dtype : torch.dtype
-        Data type for tensors, set to torch.float32 for efficiency.
+        The data type for the tensors, typically set to torch.float32 for efficiency.
     h5f : h5py.File
-        Handle for the opened HDF5 file.
+        A handle for the opened HDF5 file.
     num_runs : int
-        Total number of simulation runs (groups) in the dataset.
-    group_names : list
-        List of names for each group in the HDF5 file.
+        The total number of simulation runs (groups) in the dataset.
+    group_names : list of str
+        List of names for each group (simulation run) in the HDF5 file.
+    group_boundaries : np.ndarray
+        Cumulative sum of the number of time steps per group (simulation run).
+    num_groups : int
+        The number of simulation runs (groups) in the dataset.
     """
 
     def __init__(self, path: str, mode: str, skip: int = 1):
         """
-        Initialize a torch dataset object.
+        Initialize the dataset object for loading simulation data from an HDF5 file.
 
-        Parameters:
+        Parameters
         ----------
         path : str
             Path to the directory containing the HDF5 data files.
         mode : str
-            Mode specifying which data to load: 'train', 'valid', or 'test'.
+            The mode specifying which dataset to load. Should be one of 'train', 'valid', or 'test'.
         skip : int, optional
-            Number of time steps to skip when retrieving data. Default is 1.
+            The number of time steps to skip when retrieving data. Default is 1.
+
+        Raises
+        ------
+        ValueError
+            If the provided mode is not one of 'train', 'valid', or 'test'.
         """
         super().__init__()
+
+        # Validate the mode input
+        if mode not in ['train', 'valid', 'test']:
+            raise ValueError("mode must be one of 'train', 'valid', or 'test'")
 
         self.path = path
         self.skip = skip
         self.mode = mode
-        self.dtype = torch.float32  # Using float32 for efficiency
-        
-        # Open the HDF5 file for reading
+        self.dtype = torch.float32  # Use float32 for efficiency in memory and computation
+
+        # Open the HDF5 file corresponding to the chosen mode
         self.h5f = h5py.File(f'{self.path}/{self.mode}_data.h5', 'r')
-        
-        # Retrieve the number of runs (groups) in the dataset
+
+        # Retrieve the names of the groups (simulation runs) in the HDF5 file
         self.group_names = list(self.h5f.keys())
-        self.num_runs = len(self.group_names)
+
+        # Compute the cumulative sum of the number of time steps per group, considering the skip factor
+        self.group_boundaries = np.cumsum(
+            [0.0] + [
+                len(self.h5f[group_name]['time'][:]) - self.skip for group_name in self.group_names
+            ]
+        )
+
+        # The number of simulation runs (groups) in the dataset
+        self.num_groups = len(self.group_names)
 
     def __len__(self) -> int:
         """
-        Get the total number of experiments (groups) in the dataset.
+        Return the total number of samples in the dataset.
 
-        Returns:
+        The length of the dataset is the cumulative sum of the number of valid time steps across all groups.
+
+        Returns
         -------
         int
-            The number of runs (groups) in the dataset.
+            The total number of samples in the dataset.
         """
-        return self.num_runs
+        return int(self.group_boundaries[-1])
 
     def __getitem__(self, index: int) -> Tuple[torch.Tensor, torch.Tensor]:
         """
-        Retrieve the trajectory and corresponding coordinates for a specific experiment.
+        Retrieve a sample from the dataset.
 
-        Parameters:
+        Given an index, this method returns a tuple of tensors containing the field data 
+        at a particular time step and the field data at the subsequent time step (with a skip of `skip`).
+
+        Parameters
         ----------
         index : int
-            Index of the experiment/trajectory to retrieve.
+            The index of the sample to retrieve.
 
-        Returns:
+        Returns
         -------
         Tuple[torch.Tensor, torch.Tensor]
-            - The trajectory of the experiment (shape: (nt, ndim)).
-            - The spatial coordinates for each snapshot (shape: (2, ndim)),
-              with [0, :] representing x-coordinates and [1, :] representing y-coordinates.
+            A tuple containing two tensors:
+            - field_data: Tensor at the current time step.
+            - next_field_data: Tensor at the subsequent time step, after skipping `skip` steps.
+
+        Raises
+        ------
+        IndexError
+            If the index is out of range for the dataset.
         """
-        if index < 0 or index >= self.num_runs:
-            raise IndexError("Index out of bounds for the dataset.")
+        # Identify the group (simulation run) and the index within that group
+        group_id = np.digitize(index, self.group_boundaries, right=False) - 1
+        index_within_group = index - self.group_boundaries[group_id]
 
-        group_name = self.group_names[index]
+        # Load the field data for the current time step and the subsequent time step (after skipping `skip` steps)
+        field_data = torch.from_numpy(
+            self.h5f[self.group_names[group_id]]['field'][index_within_group]
+        ).to(self.dtype)
 
-        # Load time values from the specified group
-        times = self.h5f[group_name]['time'][:]
-        
-        if len(times) <= self.skip:
-            raise ValueError(f"Not enough time steps to skip {self.skip} in group {group_name}.")
-
-        # Randomly select a valid index to retrieve the field data
-        iterate = np.random.randint(0, len(times) - self.skip)
-
-        # Load the field data and return it as a tuple of tensors
-        field_data = torch.from_numpy(self.h5f[group_name]['field'][iterate]).to(self.dtype)
-        next_field_data = torch.from_numpy(self.h5f[group_name]['field'][iterate + self.skip]).to(self.dtype)
+        next_field_data = torch.from_numpy(
+            self.h5f[self.group_names[group_id]]['field'][index_within_group + self.skip]
+        ).to(self.dtype)
 
         return field_data, next_field_data
 
     def close(self):
-        """Close the HDF5 file to free resources."""
+        """
+        Close the HDF5 file to free up resources.
+
+        This method should be called after the dataset is no longer needed to ensure that the HDF5 file
+        is properly closed, releasing any held resources.
+        """
         self.h5f.close()
