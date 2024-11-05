@@ -91,14 +91,12 @@ class CahnHilliardSimulator:
     equation. Computational Materials Science, 81, 216-225.
     """
 
-    def __init__(self, u: np.ndarray, dt: float):
+    def __init__(self, dt: float):
         """
         Initialize the Cahn-Hilliard simulator with a concentration field.
 
         Parameters:
         -----------
-        u : np.ndarray
-            Initial concentration field.
         dt : float
             Time step for the simulation.
 
