@@ -16,9 +16,9 @@ np.random.seed(seed_val)
 # Dataset parameters
 dt = 0.01                # Time step for the simulation
 num_steps = 500          # Number of simulation steps to run
-num_train = 2            # Number of training datasets to generate
-num_valid = 1            # Number of validation datasets to generate
-num_test = 1             # Number of test datasets to generate
+num_train = 10           # Number of training datasets to generate
+num_valid = 5            # Number of validation datasets to generate
+num_test = 5             # Number of test datasets to generate
 
 # Define the number of experiments for each mode
 experiments = {'train': num_train, 'valid': num_valid, 'test': num_test}

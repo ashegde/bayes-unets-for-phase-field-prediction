@@ -105,8 +105,8 @@ class CahnHilliardSimulator:
         # Problem setup
         x_right = 2
         y_right = 2
-        x_res = 32
-        y_res = 32
+        x_res = 64
+        y_res = 64
         x = np.linspace(
             0.5*x_right/x_res,
             x_right-0.5*x_right/x_res,
