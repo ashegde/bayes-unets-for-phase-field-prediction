@@ -130,7 +130,7 @@ class H5Dataset(Dataset):
             self.h5f[self.group_names[group_id]]['field_values'][index_within_group + self.skip]
         ).to(self.dtype)
 
-        return field_data[:, None, :, :], next_field_data[:, None, :, :] # (B, C=1, H, W)
+        return field_data[None, :, :], next_field_data[None, :, :] # adding channel dimension (C=1, H, W)
 
     def close(self):
         """
