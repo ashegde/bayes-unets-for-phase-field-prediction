@@ -130,7 +130,7 @@ class H5Dataset(Dataset):
             self.h5f[self.group_names[group_id]]['field_values'][index_within_group + self.skip]
         ).to(self.dtype)
 
-        return field_data, next_field_data
+        return field_data.unsqueeze(1), next_field_data.unsqueeze(1) # (B, C=1, H, W)
 
     def close(self):
         """
