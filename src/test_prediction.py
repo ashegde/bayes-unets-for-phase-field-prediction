@@ -1,11 +1,3 @@
-"""
-Training Script for UNet-based Cahn-Hilliard Equation Solver
-
-This module provides functionality for training a UNet surrogate model
-for the Cahn-Hilliard equation. It includes training, validation, model
-checkpointing functionalities, and logs key training metrics.
-"""
-
 import argparse
 from datetime import datetime
 import os
@@ -14,12 +6,12 @@ import logging
 
 import numpy as np
 import torch
-from torch import optim
 from torch.utils.data import DataLoader
 from torch.nn import MSELoss
 
 from pipeline.dataset.loaders import H5Dataset
 from pipeline.model.model import UNet2d
+from pipeline.inference.
 
 
 def setup_directories(timestring: str, args) -> tuple[str, str, str]:
@@ -144,80 +136,15 @@ def main(args: argparse.Namespace) -> None:
 
     # Define loss function and optimizer
     loss_fn = MSELoss(reduction='mean')
-    optimizer = optim.AdamW(
-        model.parameters(),
-        lr=args.lr,
-        weight_decay=args.weight_decay,
-    )
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer,
-        mode='min',
-        factor=args.lr_decay,
-        patience=5,
-        min_lr=1e-5,
-    )
 
-    min_val_loss = float('inf')
-
-    # Training loop
-    for epoch in range(args.n_epochs):
-        epoch_lr = optimizer.param_groups[0]['lr']
-        logging.info(f'Epoch {epoch}/{args.n_epochs}, learning rate {epoch_lr}')
-
-        # Training step
-        model.train()
-        for step, (xb, yb) in enumerate(train_loader):
-            optimizer.zero_grad()
-            pred = model(xb)
-            loss = loss_fn(pred, yb)
-            loss.backward()
-            optimizer.step()
-
-            # Log training loss
-            logging.info(f'Train Step {step}/{len(train_loader)} - Loss: {loss.item()}')
-
-        # Validation step
-        if epoch % args.valid_freq == 0:
-            model.eval()
-            valid_loss = []
-            with torch.no_grad():
-                for xb, yb in valid_loader:
-                    pred = model(xb)
-                    loss = loss_fn(pred, yb)
-                    valid_loss.append(loss.item())
-
-            # Log validation loss
-            val_loss = np.mean(valid_loss)
-            logging.info(f'Validation Loss: {val_loss}')
-
-            # Checkpoint best model so far
-            if val_loss < min_val_loss:
-                torch.save(model.state_dict(), f'{model_path}/checkpoint_model.pt')
-                min_val_loss = val_loss
-                logging.info(f'Updated best model saved at {save_path}')
-
-            # Adjust learning rate
-            scheduler.step(val_loss)
-
-    # Final model save
-    torch.save(model.state_dict(), save_path)
-    logging.info(f'Final model saved at {save_path}')
 
 
 if __name__ == "__main__":
     # Argument parser
-    parser = argparse.ArgumentParser(description='Train a UNET-based PDE solver for Cahn-Hilliard system.')
+    parser = argparse.ArgumentParser(description='Make predictions using an already trained model')
     
     # Training parameters
     parser.add_argument('--batch_size', type=int, default=64, help='Number of samples in each minibatch')
-    parser.add_argument('--time_skip', type=int, default=25, help='Number of time steps to skip during prediction/inference')
-    parser.add_argument('--n_epochs', type=int, default=10, help='Number of training epochs')
-    parser.add_argument('--lr', type=float, default=1e-3, help='Learning rate')
-    parser.add_argument('--lr_decay', type=float, default=0.9, help='Learning rate decay factor')
-    parser.add_argument('--weight_decay', type=float, default=1e-6, help='Weight decay for optimizer')
-
-    # Miscellaneous
-    parser.add_argument('--valid_freq', type=int, default=1, help='Number of epochs between validation steps')
     
     # Parse arguments and run main function
     args = parser.parse_args()
