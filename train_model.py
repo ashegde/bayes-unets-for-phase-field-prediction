@@ -2,7 +2,7 @@
 Training Script for UNet-based Cahn-Hilliard Equation Solver
 
 This module provides functionality for training a UNet surrogate model
-for the Cahn-Hilliard equation. It includes training, validation, and model
+for the Cahn-Hilliard equation. It includes training, validation, model
 checkpointing functionalities, and logs key training metrics.
 """
 
@@ -22,7 +22,7 @@ from loaders import H5Dataset
 from model import UNet2d
 
 
-def setup_directories(timestring: str, args) -> str:
+def setup_directories(timestring: str, args) -> tuple[str, str, str]:
     """
     Creates necessary directories for saving model and logs.
 
@@ -43,10 +43,10 @@ def setup_directories(timestring: str, args) -> str:
     os.makedirs(model_path, exist_ok=True)
     os.makedirs(log_path, exist_ok=True)
 
-    return save_path
+    return save_path, model_path, log_path
 
 
-def configure_logging() -> None:
+def configure_logging(path: str) -> None:
     """
     Sets up the logging configuration to log training and validation details.
 
@@ -57,7 +57,7 @@ def configure_logging() -> None:
         format='%(asctime)s - %(levelname)s - %(message)s',
         handlers=[
             logging.StreamHandler(),
-            logging.FileHandler('train_log.txt', mode='w', encoding='utf-8')
+            logging.FileHandler(f'{path}/train.log', mode='w', encoding='utf-8')
         ]
     )
 
@@ -115,8 +115,8 @@ def main(args: argparse.Namespace) -> None:
     timestring = (
         f'{date_time.month}{date_time.day}{date_time.hour}{date_time.minute}'
     )
-    save_path = setup_directories(timestring, args)
-    configure_logging()
+    save_path, model_path, log_path = setup_directories(timestring, args)
+    configure_logging(log_path)
 
     # Set device (cuda if available)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -189,9 +189,9 @@ def main(args: argparse.Namespace) -> None:
             val_loss = np.mean(valid_loss)
             logging.info(f'Validation Loss: {val_loss}')
 
-            # Save best model
+            # Checkpoint best model so far
             if val_loss < min_val_loss:
-                torch.save(model.state_dict(), save_path)
+                torch.save(model.state_dict(), f'{model_path}/checkpoint_model_epoch_{epoch}.pt')
                 min_val_loss = val_loss
                 logging.info(f'Current best model saved at {save_path}')
 
