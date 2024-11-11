@@ -8,9 +8,9 @@ for the Cahn-Hilliard equation.
 import argparse
 from datetime import datetime
 import os
+import random
 
 import numpy as np
-import random
 import torch
 from torch import optim
 from torch.utils.data import DataLoader
@@ -18,20 +18,21 @@ from torch.utils.data import DataLoader
 from loaders import H5Dataset
 from model import UNet2d
 
+
 def main(args: argparse):
 
     # setup directories
     date_time = datetime.now()
     timestring = (
-        f'{date_time.date().month}{date_time.date().day}',
-        f'{date_time.time().hour}{date_time.time().minute}',
+        f'{date_time.date().month}{date_time.date().day}'
+        f'{date_time.time().hour}{date_time.time().minute}'
     )
     data_path = 'data'
     model_path = f'model_{args.model}_{timestring}'
     log_path = f'{model_path}/log'
     save_path = (
-        f'{model_path}/model_savetime_{timestring}',
-        f'_batchsize_{args.batch_size}_timeskip_{args.time_skip}.pt',
+        f'{model_path}/model_savetime_{timestring}'
+        f'_batchsize_{args.batch_size}_timeskip_{args.time_skip}.pt'
     )
 
     os.makedirs(model_path, exist_ok=True)
@@ -47,11 +48,27 @@ def main(args: argparse):
 
     # Load datasets
 
-    train_dataset = H5Dataset(path=data_path, mode='train', skip=args.time_skip)
-    valid_dataset = H5Dataset(path=data_path, mode='valid', skip=args.time_skip)
+    train_dataset = H5Dataset(
+        path=data_path,
+        mode='train',
+        skip=args.time_skip,
+    )
+    valid_dataset = H5Dataset(
+        path=data_path,
+        mode='valid',
+        skip=args.time_skip,
+    )
 
-    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
-    valid_loader = DataLoader(valid_dataset, batch_size=args.batch_size, shuffle=False)
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=args.batch_size,
+        shuffle=True,
+    )
+    valid_loader = DataLoader(
+        valid_dataset,
+        batch_size=args.batch_size,
+        shuffle=False,
+    )
 
     print(f'Device: {device}')
     print(f'Save to: {save_path}')
@@ -60,7 +77,7 @@ def main(args: argparse):
     in_channels = 1
     out_channels = in_channels
     init_features = 16
-    
+
     model = UNet2d(
         in_channels=in_channels,
         out_channels=out_channels,
@@ -93,18 +110,17 @@ def main(args: argparse):
     log = 'train_log.txt'
     date_time = datetime.now()
     current_date = (
-        f'mm/dd/yyyy - {date_time.date().month}/',
-        f'{date_time.date().day}/',
-        f'{date_time.date().year}',
+        f'mm/dd/yyyy - {date_time.date().month}/'
+        f'{date_time.date().day}/'
+        f'{date_time.date().year}'
     )
     current_time = (
-        f'hh:mm:ss - {date_time.time().hour}:',
-        f'{date_time.time().minute}:',
-        f'{date_time.time().second}'',
+        f'hh:mm:ss - {date_time.time().hour}:'
+        f'{date_time.time().minute}:'
+        f'{date_time.time().second}'
     )
-    with open(log, 'w') as f:
+    with open(log, 'w', encoding='utf-8') as f:
         f.write(f'Initialized on {current_date} {current_time}')
-
 
     # Training loop
     min_val_loss = 10e30
@@ -112,7 +128,7 @@ def main(args: argparse):
 
     for epoch in range(args.n_epochs):
         print(f"Epoch {epoch}")
-        
+
         # training step
         model.train()
         step = 0
@@ -124,9 +140,13 @@ def main(args: argparse):
 
             # Log training results
             train_loss = loss.item()
-            with open(log, 'a'):
+            with open(log, 'a', encoding='utf-8'):
                 f.write(
-                    f'Epoch {epoch} || train step {step} / {n_batches_per_epoch} || loss {train_loss}'
+                    (
+                        f'Epoch {epoch} ||'
+                        f' train step {step} / {n_batches_per_epoch} ||'
+                        f' loss {train_loss}'
+                    )
                 )
             step += 1
 
@@ -140,8 +160,8 @@ def main(args: argparse):
                 valid_loss.append(loss.item())
 
             # Log validation results
-            val_loss = torch.mean(valid_loss)
-            with open(log,'a'):
+            val_loss = np.mean(valid_loss)
+            with open(log, 'a', encoding='utf-8'):
                 f.write(f'Validation || loss {val_loss}')
 
             # Save best model
@@ -149,8 +169,9 @@ def main(args: argparse):
                 torch.save(
                     model.state_dict(),
                     (
-                        f'{model_path}/best_model_savetime_{timestring}',
-                        f'_batchsize_{args.batch_size}_timeskip_{args.time_skip}.pt',
+                        f'{model_path}/best_model_savetime_{timestring}'
+                        f'_batchsize_{args.batch_size}_'
+                        f'timeskip_{args.time_skip}.pt'
                     )
                 )
                 min_val_loss = val_loss
