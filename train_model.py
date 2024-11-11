@@ -20,7 +20,9 @@ from model import UNet2d
 
 
 def main(args):
-
+    """
+    Main function for model training.
+    """
     # setup directories
     date_time = datetime.now()
     timestring = (
@@ -28,7 +30,7 @@ def main(args):
         f'{date_time.time().hour}{date_time.time().minute}'
     )
     data_path = 'data'
-    model_path = f'model_{args.model}_{timestring}'
+    model_path = f'model_{timestring}'
     log_path = f'{model_path}/log'
     save_path = (
         f'{model_path}/model_savetime_{timestring}'
