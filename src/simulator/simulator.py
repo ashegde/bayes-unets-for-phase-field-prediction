@@ -1,3 +1,10 @@
+"""
+Cahn-Hilliard Simulator
+
+This module contains a simulator for the Cahn-Hilliard equation,
+which models the process of phase separation in binary fluids. 
+"""
+
 import numpy as np
 import scipy
 import scipy.fftpack

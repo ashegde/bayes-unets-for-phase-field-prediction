@@ -1,6 +1,7 @@
 """
-This module generates training, validation, and test datasets.
+Dataset Preparation
 
+This module generates training, validation, and test datasets.
 These datasets are constructed using the imported Cahn-Hilliard simulator,
 and are saved in the HDF5 format.
 """
