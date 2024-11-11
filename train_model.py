@@ -153,7 +153,7 @@ def main(args: argparse.Namespace) -> None:
         optimizer,
         mode='min',
         factor=args.lr_decay,
-        patience=20,
+        patience=5,
         min_lr=1e-5,
     )
 
@@ -208,7 +208,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Train a UNET-based PDE solver for Cahn-Hilliard system.')
     
     # Training parameters
-    parser.add_argument('--batch_size', type=int, default=16, help='Number of samples in each minibatch')
+    parser.add_argument('--batch_size', type=int, default=64, help='Number of samples in each minibatch')
     parser.add_argument('--time_skip', type=int, default=25, help='Number of time steps to skip during prediction/inference')
     parser.add_argument('--n_epochs', type=int, default=30, help='Number of training epochs')
     parser.add_argument('--lr', type=float, default=1e-3, help='Learning rate')
