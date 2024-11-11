@@ -161,7 +161,7 @@ def main(args: argparse.Namespace) -> None:
 
     # Training loop
     for epoch in range(args.n_epochs):
-        logging.info(f'Epoch {epoch}/{args.n_epochs}')
+        logging.info(f'Epoch {epoch}/{args.n_epochs}, learning rate {optimizer.param_groups[0]['lr']}')
 
         # Training step
         model.train()
