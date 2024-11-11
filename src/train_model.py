@@ -194,7 +194,7 @@ def main(args: argparse.Namespace) -> None:
             if val_loss < min_val_loss:
                 torch.save(model.state_dict(), f'{model_path}/checkpoint_model_epoch_{epoch}.pt')
                 min_val_loss = val_loss
-                logging.info(f'Current best model saved at {save_path}')
+                logging.info(f'Updated best model saved at {save_path}')
 
             # Adjust learning rate
             scheduler.step(val_loss)
