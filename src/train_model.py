@@ -174,7 +174,8 @@ def main(args: argparse.Namespace) -> None:
             optimizer.step()
 
             # Log training loss
-            logging.info(f'Train Step {step}/{len(train_loader)} - Loss: {loss.item()}')
+            if step % args.log_freq == 0:
+                logging.info(f'Train Step {step}/{len(train_loader)} - Loss: {loss.item()}')
 
         # Validation step
         if epoch % args.valid_freq == 0:
@@ -213,11 +214,12 @@ if __name__ == "__main__":
     parser.add_argument('--time_skip', type=int, default=25, help='Number of time steps to skip during prediction/inference')
     parser.add_argument('--n_epochs', type=int, default=10, help='Number of training epochs')
     parser.add_argument('--lr', type=float, default=1e-3, help='Learning rate')
-    parser.add_argument('--lr_decay', type=float, default=0.9, help='Learning rate decay factor')
+    parser.add_argument('--lr_decay', type=float, default=0.4, help='Learning rate decay factor')
     parser.add_argument('--weight_decay', type=float, default=1e-6, help='Weight decay for optimizer')
 
     # Miscellaneous
     parser.add_argument('--valid_freq', type=int, default=1, help='Number of epochs between validation steps')
+    parser.add_argument('--log_freq', type=int, default=1, help='Logging frequency for training steps')
     
     # Parse arguments and run main function
     args = parser.parse_args()
