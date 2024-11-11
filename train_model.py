@@ -19,7 +19,7 @@ from loaders import H5Dataset
 from model import UNet2d
 
 
-def main(args: argparse):
+def main(args):
 
     # setup directories
     date_time = datetime.now()
@@ -185,15 +185,41 @@ def main(args: argparse):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Train an UNET-based PDE solver for the Cahn-Hilliard system')
+    parser = argparse.ArgumentParser(
+        description=(
+            'Train an UNET-based PDE solver'
+            'for the Cahn-Hilliard system'
+        )
+    )
     # training parameters
-    parser.add_argument('--batch_size', type=int, default=16, help='Number of samples in each minibatch')
-    parser.add_argument('--time_skip', type=int, default=25, help='Number of time steps to skip during prediction/inference')
-    parser.add_argument('--n_epochs', type=int, default=30, help='Number of training epochs')
-    parser.add_argument('--lr', type=float, default=1e-3, help='Learning rate')
-    parser.add_argument('--lr_decay', type=float, default=0.9, help='Learning rate decay')
-    parser.add_argument('--weight_decay',type=float, default=1e-6, help='weight decay')
+    parser.add_argument(
+        '--batch_size', type=int, default=16,
+        help='Number of samples in each minibatch',
+    )
+    parser.add_argument(
+        '--time_skip', type=int, default=25,
+        help='Number of time steps to skip during prediction/inference',
+    )
+    parser.add_argument(
+        '--n_epochs', type=int, default=30,
+        help='Number of training epochs',
+    )
+    parser.add_argument(
+        '--lr', type=float, default=1e-3,
+        help='Learning rate',
+    )
+    parser.add_argument(
+        '--lr_decay', type=float, default=0.9,
+        help='Learning rate decay',
+    )
+    parser.add_argument(
+        '--weight_decay', type=float, default=1e-6,
+        help='weight decay',
+    )
     # Misc
-    parser.add_argument('--valid_freq', type=int, default=1, help='number of epochs between validation steps')
+    parser.add_argument(
+        '--valid_freq', type=int, default=1,
+        help='number of epochs between validation steps',
+    )
     args = parser.parse_args()
     main(args)
