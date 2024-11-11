@@ -10,7 +10,8 @@ import os
 import pickle
 import h5py
 import numpy as np
-from simulator import CahnHilliardSimulator
+
+from simulator.simulator import CahnHilliardSimulator
 
 # Create a directory for storing data if it does not exist
 data_dir = 'data'

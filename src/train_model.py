@@ -18,8 +18,8 @@ from torch import optim
 from torch.utils.data import DataLoader
 from torch.nn import MSELoss
 
-from loaders import H5Dataset
-from model import UNet2d
+from pipeline.dataset.loaders import H5Dataset
+from pipeline.model.model import UNet2d
 
 
 def setup_directories(timestring: str, args) -> tuple[str, str, str]:
