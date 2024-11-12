@@ -8,9 +8,9 @@ checkpointing functionalities, and logs key training metrics.
 
 import argparse
 from datetime import datetime
+import logging
 import os
 import random
-import logging
 
 import numpy as np
 import torch
@@ -193,7 +193,7 @@ def main(args: argparse.Namespace) -> None:
 
             # Checkpoint best model so far
             if val_loss < min_val_loss:
-                torch.save(model.state_dict(), f'{model_path}/checkpoint_model.pt')
+                torch.save(model.state_dict(), f'{model_path}/checkpoint_model_tskip_{args.time_skip}.pt')
                 min_val_loss = val_loss
                 logging.info(f'Updated best model saved at {save_path}')
 
@@ -208,7 +208,7 @@ def main(args: argparse.Namespace) -> None:
 if __name__ == "__main__":
     # Argument parser
     parser = argparse.ArgumentParser(description='Train a UNET-based PDE solver for Cahn-Hilliard system.')
-    
+
     # Training parameters
     parser.add_argument('--batch_size', type=int, default=64, help='Number of samples in each minibatch')
     parser.add_argument('--time_skip', type=int, default=25, help='Number of time steps to skip during prediction/inference')
@@ -220,7 +220,7 @@ if __name__ == "__main__":
     # Miscellaneous
     parser.add_argument('--valid_freq', type=int, default=1, help='Number of epochs between validation steps')
     parser.add_argument('--log_freq', type=int, default=1, help='Logging frequency for training steps')
-    
+
     # Parse arguments and run main function
     args = parser.parse_args()
     main(args)

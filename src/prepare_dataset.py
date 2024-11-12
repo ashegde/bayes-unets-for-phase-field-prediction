@@ -8,6 +8,7 @@ and are saved in the HDF5 format.
 
 import os
 import pickle
+
 import h5py
 import numpy as np
 
@@ -26,7 +27,7 @@ np.random.seed(seed_val)
 dt = 0.01                # Time step for the simulation
 n_steps = 500          # Number of simulation steps to run
 n_train = 50           # Number of training datasets to generate
-n_valid = 5            # Number of validation datasets to generate
+n_valid = 10            # Number of validation datasets to generate
 n_test = 5             # Number of test datasets to generate
 
 u_init = 0.0
