@@ -36,7 +36,7 @@ class UNet2d(nn.Module):
         Creates a U-Net block consisting of two convolutional layers, normalization, and activation.
     """
 
-    def __init__(self, in_channels: int = 3, out_channels: int = 1, init_features: int = 32):
+    def __init__(self, in_channels: int = 3, out_channels: int = 1, features: int = 32):
         """
         Initializes the U-Net model.
 
@@ -50,8 +50,6 @@ class UNet2d(nn.Module):
             Initial number of features (default is 32).
         """
         super(UNet2d, self).__init__()
-
-        features = init_features
         
         # Encoder path
         self.encoder1 = UNet2d._block(in_channels, features, name="enc1")

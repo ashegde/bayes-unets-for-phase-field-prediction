@@ -74,12 +74,12 @@ def create_model(device: torch.device) -> torch.nn.Module:
     """
     in_channels = 1
     out_channels = in_channels
-    init_features = 16
+    features = 16
 
     model = UNet2d(
         in_channels=in_channels,
         out_channels=out_channels,
-        init_features=init_features,
+        features=features,
     )
 
     model.to(device)

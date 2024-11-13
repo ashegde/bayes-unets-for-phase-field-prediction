@@ -8,6 +8,7 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 from torch.nn import MSELoss
+import torch.func as tf
 
 from pipeline.dataset.loaders import H5Dataset
 from pipeline.model.model import UNet2d
@@ -31,12 +32,12 @@ def load_model(path_to_model: str, device: torch.device) -> torch.nn.Module:
     """
     in_channels = 1
     out_channels = in_channels
-    init_features = 16
+    features = 16
 
     model = UNet2d(
         in_channels=in_channels,
         out_channels=out_channels,
-        init_features=init_features,
+        features=features,
     )
     model.load_state_dict(
         torch.load(path_to_model, map_location=device)
@@ -54,16 +55,28 @@ results_path = 'results'
 os.makedirs(results_path, exist_ok=True)
 
 # load model
-model_path = glob.glob('model_*/')
-path_to_model = glob.glob(model_path+'/checkpoint*.pt')
-t_skip = int(saved_model[0].split('_')[-1][:-3] )
+path_to_model = glob.glob('model_*/checkpoint*.pt')
+t_skip = int(path_to_model.split('_')[-1][:-3] )
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 model = load_model(path_to_model=path_to_model, device=device)
+
+# load training loss function
+loss_fn = MSELoss(reduction='mean')
 
 # load training and test datasets
 train_dataset = H5Dataset(path='data', mode='train', skip=t_skip)
 test_dataset = H5Dataset(path='data', mode='valid')
 
+# setup loss projected posterior sampler
+params = {k: v.detach() for k, v in model.named_parameters()}
 
-#
+# wrappers for single point evaluations
+def model_single(params, x):
+    return tf.functional_call(model, params, (x.unsqueeze(0),)).squeeze(0)
+
+def loss_single(params, x, y):
+    pred = model_single(params, x)
+    return loss_fn(pred, y)
+
+# cache
