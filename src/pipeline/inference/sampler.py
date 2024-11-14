@@ -14,7 +14,7 @@ Marvin Pförtner, Lukas Tatzel, and Søren Hauberg.
 arXiv preprint arXiv:2406.03334 (2024).
 
 """
-
+import copy
 import os
 import glob
 import pickle
@@ -64,7 +64,7 @@ def linearized_predict(
     param0: Dict,
     param1: Dict,
     x: torch.Tensor,
-):
+) -> torch.Tensor:
     """
     Evaluates a linearized model, as recommended in (2).
 
@@ -177,30 +177,30 @@ def precompute_inv_jjt(
         list containing inv(Jb@Jb.T) for each batch b.
     """
 
-    jjt_cache = []
+    inv_jjt_cache = []
 
     for b, data in enumerate(tqdm.tqdm(train_loader)):
         xb, yb = data
-        jjt_cache.append(
+        inv_jjt_cache.append(
             torch.linalg.pinv(batched_jjt(func, params, xb, yb))
         )
     
     # save
     if save_path:
         with open(save_path, 'wb') as f:
-            pickle.dump(jjt_cache, f)
+            pickle.dump(inv_jjt_cache, f)
 
-    return jjt_cache
+    return inv_jjt_cache
 
 
 def batched_proj(
     func: Callable,
-    params: Dict,
+    base_params: Dict,
     new_params: Dict,
     xb: torch.Tensor,
     yb: torch.Tensor,
     inv_jjt: torch.Tensor,
-):
+) -> Dict:
     """
     Project model_parameters `new_params` onto the null space of J,
     where J is the jacobian of `func` with respect to parameter `params` and batch data
@@ -217,7 +217,7 @@ def batched_proj(
     func : callable
         single evaluation function -- typically, a loss function (in which O = 1)
 
-    params : dict
+    base_params : dict
         nominal model parameters
 
     new_params : dict
@@ -231,40 +231,69 @@ def batched_proj(
 
     Returns:
     --------
-    torch.tensor
-        JJ.T -- of dimension BO-by-BO
+    Dict
+        projection of new_params into the Jacobian null space
     """
     def fp(p):
         return tf.vmap(func, (None, 0, 0))(p, xb, yb)
     # let v = new_params. First, Jv:
-    _, jvp = tf.jvp(fp, (params,), (new_params,))
+    _, jvp = tf.jvp(fp, (base_params,), (new_params,))
     # next, inv_jjt
     inv_jjt_jv = torch.matmul(inv_jjt, jvp)
     # finally,
-    _, vjp_fn = tf.vjp(fp, (params,))
-    return vjp_fn(inv_jjt_jv)
+    _, vjp_fn = tf.vjp(fp, (base_params,))
+    vjps = vjp_fn(inv_jjt_jv)[0]
+    return vjps[0]
 
+def apply_proj_cycle(
+    func: Callable,
+    base_params: Dict,
+    params: Dict,
+    dataloader: DataLoader,
+    inv_jjt_cache: List,
+) -> Dict:
+    proj_params = copy.deepcopy(params)
+
+    for b, data in enumerate(tqdm.tqdm(dataloader, desc='batches', leave=False)):
+        xb, yb = data
+        proj_params = batched_proj(
+            func,
+            base_params,
+            proj_params,
+            xb,
+            yb,
+            inv_jjt_cache[b],
+        )
+    return proj_params
 
 def alternating_projection_sampler(
     n_samples: int,
+    n_cycle: int,
     func: Callable,
-    params: Dict,
+    base_params: Dict,
     prior_precision: torch.Tensor,
     dataloader: DataLoader,
-    jjt_cache_path: str = None
-)
+    inv_jjt_cache_path: str = None,
+) -> List:
     """
     pass
     """
- 
     # load cache if it exists, else precompute and save
-    if jjt_cache_path:
-        with open(jjt_cache_path, 'rb') as f:
-            inv_jjt_cache = pickle.load(jjt_cache_path)
+    if inv_jjt_cache_path:
+        with open(inv_jjt_cache_path, 'rb') as f:
+            inv_jjt_cache = pickle.load(f)
     else:
-        inv_jjt_cache = precompute_inv_jjt(func, params, dataloader, jjt_cache_path)
+        inv_jjt_cache = precompute_inv_jjt(func, base_params, dataloader, inv_jjt_cache_path)
 
     # generate samples from prior
+    param_samples = randn_params(base_params, prior_precision, n_samples)
 
-    # perform alternating projections
-    for round in range(n_rounds):
+    # perform alternating projections for n_cycles
+    proj_samples = []
+    for i, p_samp in enumerate(tqdm.tqdm(param_samples, desc ='samples')):
+        p = copy.deepcopy(p_samp)
+        for _ in tqdm.tqdm(range(n_cycle), desc='cycles', leave=False):
+            p = apply_proj_cycle(func, base_params, p, dataloader, inv_jjt_cache)
+        proj_samples.append(p)
+    return proj_samples
+
