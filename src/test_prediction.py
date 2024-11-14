@@ -1,5 +1,3 @@
-import argparse
-from datetime import datetime
 import glob
 import os
 import pickle 
@@ -40,38 +38,39 @@ def load_model(path_to_model: str, device: torch.device) -> torch.nn.Module:
         features=features,
     )
     model.load_state_dict(
-        torch.load(path_to_model, map_location=device)
+        torch.load(
+            path_to_model,
+            map_location=device,
+            weights_only=True,
+        )
     )
     return model.to(device)
 
 
-# Setting Seeds
-seed_val = 2023
-torch.manual_seed(seed_val)
-np.random.seed(seed_val)
+
 
 # Setup results directory
 results_path = 'results'
 os.makedirs(results_path, exist_ok=True)
 
-# load model
-path_to_model = glob.glob('model_*/checkpoint*.pt')
+# Load model
+path_to_model = glob.glob('model_*/checkpoint*.pt')[0]
 t_skip = int(path_to_model.split('_')[-1][:-3] )
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 model = load_model(path_to_model=path_to_model, device=device)
 
-# load training loss function
+# Training loss function
 loss_fn = MSELoss(reduction='mean')
 
-# load training and test datasets
+# Load training and test datasets
 train_dataset = H5Dataset(path='data', mode='train', skip=t_skip)
 test_dataset = H5Dataset(path='data', mode='valid')
 
-# setup loss projected posterior sampler
+# Extract nominal model parameters
 params = {k: v.detach() for k, v in model.named_parameters()}
 
-# wrappers for single point evaluations
+# Wrappers for single point evaluations
 def model_single(params, x):
     return tf.functional_call(model, params, (x.unsqueeze(0),)).squeeze(0)
 
@@ -79,4 +78,5 @@ def loss_single(params, x, y):
     pred = model_single(params, x)
     return loss_fn(pred, y)
 
-# cache
+#
+n_post_samples = 30

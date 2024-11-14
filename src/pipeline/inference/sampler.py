@@ -17,6 +17,7 @@ arXiv preprint arXiv:2406.03334 (2024).
 
 import os
 import glob
+import pickle
 import random
 from typing import Tuple, Callable, Dict, List
 
@@ -28,7 +29,11 @@ from torch.utils.data import DataLoader
 import torch.func as tf
 import tqdm
 
-def randn_params(param_template: Dict, precision: torch.tensor, n_samples: int = 1):
+def randn_params(
+    param_template: Dict,
+    precision: torch.tensor,
+    n_samples: int = 1,
+) -> Tuple[Dict,...]:
     """
     Samples model parameters from a normal distribution with mean 0 and given precision. 
 
@@ -45,16 +50,14 @@ def randn_params(param_template: Dict, precision: torch.tensor, n_samples: int =
 
     Returns:
     --------
-    dict
-        sampled model parameter dictionary, with each value containing different samples
-        in the 0-th dimension (batch dimension)
+    tuple
+        tuple of sampled model parameters
 
     """
 
-    return {
+    return ({
         k: 1/torch.sqrt(precision) * torch.randn_like(v) for k, v in param_template.items()
-    }
-
+    } for _ in range(n_samples))
 
 def linearized_predict(
     func: Callable,
@@ -96,7 +99,7 @@ def linearized_predict(
     return outputs+jvp_val
 
 
-def batched_JJt(func: Callable, params: Dict, xb: torch.Tensor, yb: torch.Tensor):
+def batched_jjt(func: Callable, params: Dict, xb: torch.Tensor, yb: torch.Tensor):
     """
     Given func: R^d --> R^O and a batch of B data points, computes BO-by-BO the matrix JJt,
     where J is the jacobian of func (with respect to params) evaluated at points in (xb, yb). 
@@ -143,7 +146,12 @@ def batched_JJt(func: Callable, params: Dict, xb: torch.Tensor, yb: torch.Tensor
     result = result.sum(0) 
     return result
 
-def precompute_inverse_(func: Callable, params: Dict, train_loader: DataLoader) -> List:
+def precompute_inv_jjt(
+    func: Callable,
+    params: Dict,
+    train_loader: DataLoader,
+    save_path: str = None,
+) -> List:
     """
     Precomputes the core inverse matrices for all batches in the DataLoader.
 
@@ -169,14 +177,20 @@ def precompute_inverse_(func: Callable, params: Dict, train_loader: DataLoader) 
         list containing inv(Jb@Jb.T) for each batch b.
     """
 
-    cache = []
+    jjt_cache = []
 
     for b, data in enumerate(tqdm.tqdm(train_loader)):
         xb, yb = data
-        cache.append(
-            torch.linalg.pinv(batched_JJt(func, params, xb, yb))
+        jjt_cache.append(
+            torch.linalg.pinv(batched_jjt(func, params, xb, yb))
         )
-    return cache
+    
+    # save
+    if save_path:
+        with open(save_path, 'wb') as f:
+            pickle.dump(jjt_cache, f)
+
+    return jjt_cache
 
 
 def batched_proj(
@@ -185,7 +199,7 @@ def batched_proj(
     new_params: Dict,
     xb: torch.Tensor,
     yb: torch.Tensor,
-    invJJt: torch.Tensor,
+    inv_jjt: torch.Tensor,
 ):
     """
     Project model_parameters `new_params` onto the null space of J,
@@ -224,11 +238,11 @@ def batched_proj(
         return tf.vmap(func, (None, 0, 0))(p, xb, yb)
     # let v = new_params. First, Jv:
     _, jvp = tf.jvp(fp, (params,), (new_params,))
-    # next, invJJt
-    invJJt_Jv = torch.matmul(invJJt, jvp)
+    # next, inv_jjt
+    inv_jjt_jv = torch.matmul(inv_jjt, jvp)
     # finally,
     _, vjp_fn = tf.vjp(fp, (params,))
-    return vjp_fn(invJJt_Jv)
+    return vjp_fn(inv_jjt_jv)
 
 
 def alternating_projection_sampler(
@@ -237,13 +251,20 @@ def alternating_projection_sampler(
     params: Dict,
     prior_precision: torch.Tensor,
     dataloader: DataLoader,
+    jjt_cache_path: str = None
 )
     """
     pass
     """
  
     # load cache if it exists, else precompute and save
+    if jjt_cache_path:
+        with open(jjt_cache_path, 'rb') as f:
+            inv_jjt_cache = pickle.load(jjt_cache_path)
+    else:
+        inv_jjt_cache = precompute_inv_jjt(func, params, dataloader, jjt_cache_path)
 
     # generate samples from prior
 
     # perform alternating projections
+    for round in range(n_rounds):

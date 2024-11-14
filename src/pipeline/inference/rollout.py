@@ -10,6 +10,11 @@ import h5py
 import numpy as np
 import torch
 
+
+# For later, rather than looping over models with different parameters,
+# we can also vectorize using torch.func.stack_module_state and vmap.
+# https://pytorch.org/tutorials/intermediate/ensembling.html
+
 def rollout(
     model_fn: Callable,
     params: Dict,
