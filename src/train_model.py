@@ -185,6 +185,8 @@ def main(args: argparse.Namespace) -> None:
             valid_loss = []
             with torch.no_grad():
                 for xb, yb in valid_loader:
+                    xb = xb.to(device)
+                    yb = yb.to(device)
                     pred = model(xb)
                     loss = loss_fn(pred, yb)
                     valid_loss.append(loss.item())
