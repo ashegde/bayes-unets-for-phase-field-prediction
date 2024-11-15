@@ -33,7 +33,7 @@ def randn_params(
     param_template: Dict,
     precision: torch.tensor,
     n_samples: int = 1,
-) -> List[Dict,...]:
+) -> List[Dict]:
     """
     Samples model parameters from a normal distribution with mean 0 and given precision. 
 
@@ -151,13 +151,13 @@ def batched_jjt(func: Callable, params: Dict, xb: torch.Tensor, yb: torch.Tensor
     # for each block of parameter derivatives in the jacobian, contract across the parameter dimension
     result = torch.stack([torch.einsum(einsum_expr, j, j) for j in jac]) 
     # sum across all parameter blocks to complete the contraction
-    result = result.sum(0) 
+    result = result.sum(0)
     return result
 
 
 def precompute_inv_jjt(
     func: Callable,
-    params: Dict,
+    base_params: Dict,
     train_loader: DataLoader,
     save_path: str = None,
 ) -> List:
@@ -174,7 +174,7 @@ def precompute_inv_jjt(
     func : callable
         single evaluation function -- typically, a loss function
 
-    params : dict
+    base_params : dict
         nominal model parameters
 
     train_loader : torch.utils.data.dataloader
@@ -187,11 +187,14 @@ def precompute_inv_jjt(
     """
 
     inv_jjt_cache = []
+    device = next(iter(base_params.items()))[1].device
 
     for b, data in enumerate(tqdm.tqdm(train_loader)):
         xb, yb = data
+        xb.to(device)
+        yb.to(device)
         inv_jjt_cache.append(
-            torch.linalg.pinv(batched_jjt(func, params, xb, yb))
+            torch.linalg.pinv(batched_jjt(func, base_params, xb, yb)).cpu()
         )
     
     # save
@@ -247,9 +250,9 @@ def batched_proj(
         return tf.vmap(func, (None, 0, 0))(p, xb, yb)
     # let v = new_params. First, Jv:
     _, jvp = tf.jvp(fp, (base_params,), (new_params,))
-    # next, inv_jjt
+    # next, u = inv_jjt @ Jv
     inv_jjt_jv = torch.matmul(inv_jjt, jvp)
-    # finally,
+    # finally, J.T u = (u.T J).T
     _, vjp_fn = tf.vjp(fp, (base_params,))
     vjps = vjp_fn(inv_jjt_jv)[0]
     return vjps[0]
@@ -266,16 +269,19 @@ def apply_proj_cycle(
     tbd
     """
     proj_params = copy.deepcopy(params)
-
+    device = next(iter(base_params.items()))[1].device
     for b, data in enumerate(tqdm.tqdm(dataloader, desc='batches', leave=False)):
         xb, yb = data
+        xb = xb.to(device)
+        yb = yb.to(device)
+        inv_jjt = inv_jjt_cache[b].to(device)
         proj_params = batched_proj(
             func,
             base_params,
             proj_params,
             xb,
             yb,
-            inv_jjt_cache[b],
+            inv_jjt,
         )
     return proj_params
 
@@ -300,13 +306,12 @@ def alternating_projection(
     inv_jjt_cache: List,
 ) -> Dict:
     """
-    tbd
+    Alternating Projection onto Jacobian Null Space
     """
     p = copy.deepcopy(param_to_proj)
     for _ in tqdm.tqdm(range(n_cycle), desc='cycles', leave=False):
-        p = apply_proj_cycle(func, base_params, p, dataloader, inv_jjt_cache)
-      
-    return {k: v + p[k] for k, v in base_params.items()}
+        p = apply_proj_cycle(func, base_params, p, dataloader, inv_jjt_cache)    
+    return p
 
 def lpp_sampler(
     n_samples: int,
@@ -348,5 +353,5 @@ def lpp_sampler(
             dataloader,
             inv_jjt_cache,
         )
-        proj_samples.append(p)
+        proj_samples.append({k: v + p[k] for k, v in base_params.items()})
     return proj_samples
