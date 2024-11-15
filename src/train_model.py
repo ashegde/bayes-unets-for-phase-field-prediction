@@ -167,6 +167,8 @@ def main(args: argparse.Namespace) -> None:
         # Training step
         model.train()
         for step, (xb, yb) in enumerate(train_loader):
+            xb = xb.to(device)
+            yb = yb.to(device)
             optimizer.zero_grad()
             pred = model(xb)
             loss = loss_fn(pred, yb)
