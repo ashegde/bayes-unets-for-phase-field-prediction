@@ -266,12 +266,23 @@ def apply_proj_cycle(
         )
     return proj_params
 
+
+def optimal_precision(
+    func: Callable,
+    base_params: Dict,
+    n_samples: int = 100,
+) -> float:
+    """
+
+    """
+
+
 def alternating_projection_sampler(
     n_samples: int,
     n_cycle: int,
     func: Callable,
     base_params: Dict,
-    prior_precision: torch.Tensor,
+    iso_precision: torch.Tensor,
     dataloader: DataLoader,
     inv_jjt_cache_path: str = None,
 ) -> List:
@@ -279,14 +290,14 @@ def alternating_projection_sampler(
     pass
     """
     # load cache if it exists, else precompute and save
-    if inv_jjt_cache_path:
+    if os.path.exists(inv_jjt_cache_path):
         with open(inv_jjt_cache_path, 'rb') as f:
             inv_jjt_cache = pickle.load(f)
     else:
         inv_jjt_cache = precompute_inv_jjt(func, base_params, dataloader, inv_jjt_cache_path)
 
-    # generate samples from prior
-    param_samples = randn_params(base_params, prior_precision, n_samples)
+    # generate samples from isotropic Gaussian posterior approx
+    param_samples = randn_params(base_params, iso_precision, n_samples)
 
     # perform alternating projections for n_cycles
     proj_samples = []
@@ -294,6 +305,6 @@ def alternating_projection_sampler(
         p = copy.deepcopy(p_samp)
         for _ in tqdm.tqdm(range(n_cycle), desc='cycles', leave=False):
             p = apply_proj_cycle(func, base_params, p, dataloader, inv_jjt_cache)
-        proj_samples.append(p)
+        proj_samples.append({k: v + p[k] for k, v in base_params.items()})
     return proj_samples
 
