@@ -33,7 +33,7 @@ def randn_params(
     param_template: Dict,
     precision: torch.tensor,
     n_samples: int = 1,
-) -> Tuple[Dict,...]:
+) -> List[Dict,...]:
     """
     Samples model parameters from a normal distribution with mean 0 and given precision. 
 
@@ -50,14 +50,22 @@ def randn_params(
 
     Returns:
     --------
-    tuple
-        tuple of sampled model parameters
+    list
+        list of sampled model parameters
 
     """
+    samples = []
 
-    return ({
-        k: 1/torch.sqrt(precision) * torch.randn_like(v) for k, v in param_template.items()
-    } for _ in range(n_samples))
+    f = 1/torch.sqrt(precision)
+    for _ in range(n_samples):
+        samples.append(
+            {
+                k: f*torch.randn_like(v, device=v.device)
+                for k, v in param_template.items()
+            }
+        )
+    return samples
+
 
 def linearized_predict(
     func: Callable,
@@ -145,6 +153,7 @@ def batched_jjt(func: Callable, params: Dict, xb: torch.Tensor, yb: torch.Tensor
     # sum across all parameter blocks to complete the contraction
     result = result.sum(0) 
     return result
+
 
 def precompute_inv_jjt(
     func: Callable,
@@ -245,6 +254,7 @@ def batched_proj(
     vjps = vjp_fn(inv_jjt_jv)[0]
     return vjps[0]
 
+
 def apply_proj_cycle(
     func: Callable,
     base_params: Dict,
@@ -252,6 +262,9 @@ def apply_proj_cycle(
     dataloader: DataLoader,
     inv_jjt_cache: List,
 ) -> Dict:
+    """
+    tbd
+    """
     proj_params = copy.deepcopy(params)
 
     for b, data in enumerate(tqdm.tqdm(dataloader, desc='batches', leave=False)):
@@ -267,44 +280,73 @@ def apply_proj_cycle(
     return proj_params
 
 
-def optimal_precision(
-    func: Callable,
-    base_params: Dict,
-    n_samples: int = 100,
-) -> float:
-    """
+# def optimal_precision(
+#     func: Callable,
+#     base_params: Dict,
+#     n_samples: int = 100,
+# ) -> float:
+#     """
+#     Estimates the marginal likelihood maximizing precision for the isotropic
+#     Gaussian posterior approximation. 
+#     """
 
-    """
 
-
-def alternating_projection_sampler(
-    n_samples: int,
+def alternating_projection(
     n_cycle: int,
     func: Callable,
+    base_params: Dict,
+    param_to_proj: Dict,
+    dataloader: DataLoader,
+    inv_jjt_cache: List,
+) -> Dict:
+    """
+    tbd
+    """
+    p = copy.deepcopy(param_to_proj)
+    for _ in tqdm.tqdm(range(n_cycle), desc='cycles', leave=False):
+        p = apply_proj_cycle(func, base_params, p, dataloader, inv_jjt_cache)
+      
+    return {k: v + p[k] for k, v in base_params.items()}
+
+def lpp_sampler(
+    n_samples: int,
+    n_cycle: int,
+    loss_fn: Callable,
     base_params: Dict,
     iso_precision: torch.Tensor,
     dataloader: DataLoader,
     inv_jjt_cache_path: str = None,
 ) -> List:
     """
-    pass
+    Loss Projected Posterior Sampler
+
+    tbd
     """
     # load cache if it exists, else precompute and save
     if os.path.exists(inv_jjt_cache_path):
         with open(inv_jjt_cache_path, 'rb') as f:
             inv_jjt_cache = pickle.load(f)
     else:
-        inv_jjt_cache = precompute_inv_jjt(func, base_params, dataloader, inv_jjt_cache_path)
+        inv_jjt_cache = precompute_inv_jjt(
+            loss_fn,
+            base_params,
+            dataloader,
+            inv_jjt_cache_path,
+        )
 
     # generate samples from isotropic Gaussian posterior approx
     param_samples = randn_params(base_params, iso_precision, n_samples)
 
     # perform alternating projections for n_cycles
     proj_samples = []
-    for i, p_samp in enumerate(tqdm.tqdm(param_samples, desc ='samples')):
-        p = copy.deepcopy(p_samp)
-        for _ in tqdm.tqdm(range(n_cycle), desc='cycles', leave=False):
-            p = apply_proj_cycle(func, base_params, p, dataloader, inv_jjt_cache)
-        proj_samples.append({k: v + p[k] for k, v in base_params.items()})
+    for _, p_samp in enumerate(tqdm.tqdm(param_samples, desc='samples')):
+        p = alternating_projection(
+            n_cycle,
+            loss_fn,
+            base_params,
+            p_samp,
+            dataloader,
+            inv_jjt_cache,
+        )
+        proj_samples.append(p)
     return proj_samples
-
