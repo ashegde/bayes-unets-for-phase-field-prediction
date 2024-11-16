@@ -189,10 +189,10 @@ def precompute_inv_jjt(
     inv_jjt_cache = []
     device = next(iter(base_params.items()))[1].device
 
-    for b, data in enumerate(tqdm.tqdm(train_loader)):
+    for b, data in enumerate(tqdm.tqdm(train_loader, desc='Precomputations')):
         xb, yb = data
-        xb.to(device)
-        yb.to(device)
+        xb = xb.to(device)
+        yb = yb.to(device)
         inv_jjt_cache.append(
             torch.linalg.pinv(batched_jjt(func, base_params, xb, yb)).cpu()
         )
@@ -286,15 +286,23 @@ def apply_proj_cycle(
     return proj_params
 
 
-# def optimal_precision(
-#     func: Callable,
-#     base_params: Dict,
-#     n_samples: int = 100,
-# ) -> float:
-#     """
-#     Estimates the marginal likelihood maximizing precision for the isotropic
-#     Gaussian posterior approximation. 
-#     """
+def estimate_precision(
+    func: Callable,
+    base_params: Dict,
+    n_samples: int = 100,
+) -> float:
+    """
+    Estimates the marginal likelihood maximizing precision for the isotropic
+    Gaussian posterior approximation. 
+    """
+
+    norm_param = torch.sum((v**2).sum() for _,v in base_params.items())
+    n_params = torch.sum(v.numel() for _,v in base_params.items())
+
+    # Hutchinson trace approximation
+    trace_proj = ...
+    precision = norm_param / (n_params - trace_proj)
+    return precision
 
 
 def alternating_projection(
@@ -310,7 +318,7 @@ def alternating_projection(
     """
     p = copy.deepcopy(param_to_proj)
     for _ in tqdm.tqdm(range(n_cycle), desc='cycles', leave=False):
-        p = apply_proj_cycle(func, base_params, p, dataloader, inv_jjt_cache)    
+        p = apply_proj_cycle(func, base_params, p, dataloader, inv_jjt_cache)
     return p
 
 def lpp_sampler(
