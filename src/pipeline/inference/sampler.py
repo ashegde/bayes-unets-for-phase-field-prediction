@@ -164,7 +164,7 @@ def precompute_inv_jjt(
     """
     Precomputes the core inverse matrices for all batches in the DataLoader.
 
-    Recall, for a batch Jacobian Jb, the projection is:
+    Recall, for a batch b and Jacobian Jb, the projection is:
             Proj(new_params) = (I - Jb.T @ inv(Jb@Jb.T) @ Jb) @ new_params
     In this function, we precompute all inv(Jb@Jb.T).
 
@@ -185,20 +185,23 @@ def precompute_inv_jjt(
     list
         list containing inv(Jb@Jb.T) for each batch b.
     """
+    # if the cache already exists, load it, else create it.
+    if os.path.exists(save_path):
+        with open(save_path, 'rb') as f:
+            inv_jjt_cache = pickle.load(f)
+    else:
+        inv_jjt_cache = []
+        device = next(iter(base_params.items()))[1].device
 
-    inv_jjt_cache = []
-    device = next(iter(base_params.items()))[1].device
-
-    for b, data in enumerate(tqdm.tqdm(train_loader, desc='Precomputations')):
-        xb, yb = data
-        xb = xb.to(device)
-        yb = yb.to(device)
-        inv_jjt_cache.append(
-            torch.linalg.pinv(batched_jjt(func, base_params, xb, yb)).cpu()
-        )
-    
-    # save
-    if save_path:
+        for b, data in enumerate(tqdm.tqdm(train_loader, desc='Precomputations')):
+            xb, yb = data
+            xb = xb.to(device)
+            yb = yb.to(device)
+            inv_jjt_cache.append(
+                torch.linalg.pinv(batched_jjt(func, base_params, xb, yb)).cpu()
+            )
+        
+        # save
         with open(save_path, 'wb') as f:
             pickle.dump(inv_jjt_cache, f)
 
@@ -208,7 +211,7 @@ def precompute_inv_jjt(
 def batched_proj(
     func: Callable,
     base_params: Dict,
-    new_params: Dict,
+    params_to_proj: Dict,
     xb: torch.Tensor,
     yb: torch.Tensor,
     inv_jjt: torch.Tensor,
@@ -232,7 +235,7 @@ def batched_proj(
     base_params : dict
         nominal model parameters
 
-    new_params : dict
+    params_to_proj : dict
         model parameters to-be-projected
 
     xb : torch.tensor
@@ -244,18 +247,19 @@ def batched_proj(
     Returns:
     --------
     Dict
-        projection of new_params into the Jacobian null space
+        projection of new_params onto the Jacobian null space
     """
     def fp(p):
         return tf.vmap(func, (None, 0, 0))(p, xb, yb)
     # let v = new_params. First, Jv:
-    _, jvp = tf.jvp(fp, (base_params,), (new_params,))
+    _, jvp = tf.jvp(fp, (base_params,), (params_to_proj,))
     # next, u = inv_jjt @ Jv
     inv_jjt_jv = torch.matmul(inv_jjt, jvp)
     # finally, J.T u = (u.T J).T
     _, vjp_fn = tf.vjp(fp, (base_params,))
-    vjps = vjp_fn(inv_jjt_jv)[0]
-    return vjps[0]
+    vjp = vjp_fn(inv_jjt_jv)[0][0]
+    # return (I - J.T@inv_jjt@J)v
+    return {v-vjp[k] for k, v in params_to_proj.items()}
 
 
 def apply_proj_cycle(
@@ -289,19 +293,40 @@ def apply_proj_cycle(
 def estimate_precision(
     func: Callable,
     base_params: Dict,
+    dataloader: DataLoader,
     n_samples: int = 100,
+    n_cycle: int = 10,
+    inv_jjt_cache_path: str = None,
 ) -> float:
     """
     Estimates the marginal likelihood maximizing precision for the isotropic
     Gaussian posterior approximation. 
     """
 
-    norm_param = torch.sum((v**2).sum() for _,v in base_params.items())
-    n_params = torch.sum(v.numel() for _,v in base_params.items())
+    norm_param = torch.sum((v**2).sum() for _, v in base_params.items())
+    n_params = torch.sum(v.numel() for _, v in base_params.items())
 
+    # load cache if it exists, else precompute and save
+    inv_jjt_cache = precompute_inv_jjt(
+            func,
+            base_params,
+            dataloader,
+            inv_jjt_cache_path,
+        )
     # Hutchinson trace approximation
-    trace_proj = ...
-    precision = norm_param / (n_params - trace_proj)
+    trace_approx = 0
+    for _ for n_samples:
+        test_param = randn_params(base_params, 1.0, 1)
+        param_proj = alternating_projection(
+            n_cycle,
+            func,
+            base_params,
+            test_param,
+            inv_jjt_cache,
+        )
+        trace_approx +=  sum((v*param_proj[k]).sum()  for k, v in test_param.items())
+    trace_approx /= n_samples
+    precision = norm_param / (n_params - trace_approx)
     return precision
 
 
@@ -321,6 +346,7 @@ def alternating_projection(
         p = apply_proj_cycle(func, base_params, p, dataloader, inv_jjt_cache)
     return p
 
+
 def lpp_sampler(
     n_samples: int,
     n_cycle: int,
@@ -336,11 +362,7 @@ def lpp_sampler(
     tbd
     """
     # load cache if it exists, else precompute and save
-    if os.path.exists(inv_jjt_cache_path):
-        with open(inv_jjt_cache_path, 'rb') as f:
-            inv_jjt_cache = pickle.load(f)
-    else:
-        inv_jjt_cache = precompute_inv_jjt(
+    inv_jjt_cache = precompute_inv_jjt(
             loss_fn,
             base_params,
             dataloader,
