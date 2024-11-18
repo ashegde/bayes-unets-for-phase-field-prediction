@@ -193,7 +193,7 @@ def precompute_inv_jjt(
         inv_jjt_cache = []
         device = next(iter(base_params.items()))[1].device
 
-        for b, data in enumerate(tqdm.tqdm(train_loader, desc='Precomputations')):
+        for _, data in enumerate(tqdm.tqdm(train_loader, desc='Precomputations')):
             xb, yb = data
             xb = xb.to(device)
             yb = yb.to(device)
@@ -259,7 +259,7 @@ def batched_proj(
     _, vjp_fn = tf.vjp(fp, (base_params,))
     vjp = vjp_fn(inv_jjt_jv)[0][0]
     # return (I - J.T@inv_jjt@J)v
-    return {v-vjp[k] for k, v in params_to_proj.items()}
+    return {k: v-vjp[k] for k, v in params_to_proj.items()}
 
 
 def apply_proj_cycle(
@@ -274,66 +274,69 @@ def apply_proj_cycle(
     """
     proj_params = copy.deepcopy(params)
     device = next(iter(base_params.items()))[1].device
-    for b, data in enumerate(tqdm.tqdm(dataloader, desc='batches', leave=False)):
-        xb, yb = data
-        xb = xb.to(device)
-        yb = yb.to(device)
-        inv_jjt = inv_jjt_cache[b].to(device)
-        proj_params = batched_proj(
+
+    def _batched_proj(p, xb, yb, inv_jjt):
+        return batched_proj(
             func,
             base_params,
+            p,
+            xb.to(device),
+            yb.to(device),
+            inv_jjt.to(device),
+        )
+
+    # for b, data in enumerate(tqdm.tqdm(dataloader, desc='batches', leave=False)):
+    for b, data in enumerate(dataloader):
+        xb, yb = data
+        proj_params = _batched_proj(
             proj_params,
             xb,
             yb,
-            inv_jjt,
+            inv_jjt_cache[b],
         )
     return proj_params
 
 
-def estimate_precision(
-    func: Callable,
-    base_params: Dict,
-    dataloader: DataLoader,
-    n_samples: int = 100,
-    n_cycle: int = 10,
-    inv_jjt_cache_path: str = None,
-) -> float:
-    """
-    Estimates the marginal likelihood maximizing precision for the isotropic
-    Gaussian posterior approximation. 
-    """
+# import functools
 
-    norm_param = torch.sum((v**2).sum() for _, v in base_params.items())
-    n_params = torch.sum(v.numel() for _, v in base_params.items())
+# def apply_proj_cycle(
+#     func: Callable,
+#     base_params: Dict,
+#     params: Dict,
+#     dataloader: DataLoader,
+#     inv_jjt_cache: List,
+# ) -> Dict:
+#     """
+#     tbd
+#     """
+#     proj_params = copy.deepcopy(params)
+#     device = next(iter(base_params.items()))[1].device
 
-    # load cache if it exists, else precompute and save
-    inv_jjt_cache = precompute_inv_jjt(
-            func,
-            base_params,
-            dataloader,
-            inv_jjt_cache_path,
-        )
-    # Hutchinson trace approximation
-    trace_approx = 0
-    for _ for n_samples:
-        test_param = randn_params(base_params, 1.0, 1)
-        param_proj = alternating_projection(
-            n_cycle,
-            func,
-            base_params,
-            test_param,
-            inv_jjt_cache,
-        )
-        trace_approx +=  sum((v*param_proj[k]).sum()  for k, v in test_param.items())
-    trace_approx /= n_samples
-    precision = norm_param / (n_params - trace_approx)
-    return precision
+#     def _batched_proj(p, iters):
+#         xb, yb, inv_jjt = iters
+#         return batched_proj(
+#             func,
+#             base_params,
+#             p,
+#             xb.to(device),
+#             yb.to(device),
+#             inv_jjt.to(device),
+#         )
+
+#     # for b, data in enumerate(tqdm.tqdm(dataloader, desc='batches', leave=False)):
+#     proj_params = functools.reduce(
+#         _batched_proj,
+#         ((data[0], data[1], inv_jjt_cache[b]) for b, data in enumerate(dataloader)),
+#         proj_params,
+#     )
+
+#     return proj_params
 
 
 def alternating_projection(
-    n_cycle: int,
     func: Callable,
     base_params: Dict,
+    n_cycle: int,
     param_to_proj: Dict,
     dataloader: DataLoader,
     inv_jjt_cache: List,
@@ -342,7 +345,8 @@ def alternating_projection(
     Alternating Projection onto Jacobian Null Space
     """
     p = copy.deepcopy(param_to_proj)
-    for _ in tqdm.tqdm(range(n_cycle), desc='cycles', leave=False):
+    # for _ in tqdm.tqdm(range(n_cycle), desc='cycles', leave=False):
+    for _ in range(n_cycle):
         p = apply_proj_cycle(func, base_params, p, dataloader, inv_jjt_cache)
     return p
 
@@ -376,12 +380,55 @@ def lpp_sampler(
     proj_samples = []
     for _, p_samp in enumerate(tqdm.tqdm(param_samples, desc='samples')):
         p = alternating_projection(
-            n_cycle,
             loss_fn,
             base_params,
+            n_cycle,
             p_samp,
             dataloader,
             inv_jjt_cache,
         )
         proj_samples.append({k: v + p[k] for k, v in base_params.items()})
     return proj_samples
+
+
+def estimate_precision(
+    func: Callable,
+    base_params: Dict,
+    dataloader: DataLoader,
+    n_samples: int = 100,
+    n_cycle: int = 10,
+    inv_jjt_cache_path: str = None,
+) -> float:
+    """
+    Estimates the marginal likelihood maximizing precision for the isotropic
+    Gaussian posterior approximation. 
+    """
+
+    norm_param = torch.sqrt(
+        torch.sum((v**2).sum() for _, v in base_params.items()),
+    )
+    n_params = torch.sum(v.numel() for _, v in base_params.items())
+
+    # load cache if it exists, else precompute and save
+    inv_jjt_cache = precompute_inv_jjt(
+            func,
+            base_params,
+            dataloader,
+            inv_jjt_cache_path,
+        )
+    # Hutchinson trace approximation
+    trace_approx = 0
+    for _ in range(n_samples):
+        test_params = randn_params(base_params, 1.0, 1)
+        param_proj = alternating_projection(
+            func,
+            base_params,
+            n_cycle,
+            test_params,
+            dataloader,
+            inv_jjt_cache,
+        )
+        trace_approx += sum((v*param_proj[k]).sum() for k, v in test_params.items())
+    trace_approx = trace_approx / n_samples
+    precision = norm_param / (n_params - trace_approx)
+    return precision
