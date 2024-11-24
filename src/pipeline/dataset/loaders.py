@@ -35,13 +35,11 @@ class H5Dataset(Dataset):
         for efficiency.
     h5f : h5py.File
         A handle for the opened HDF5 file.
-    num_runs : int
-        The total number of simulation runs (groups) in the dataset.
     group_names : list of str
         List of names for each group (simulation run) in the HDF5 file.
     group_boundaries : np.ndarray
         Cumulative sum of the number of time steps per group (simulation run).
-    num_groups : int
+    n_groups : int
         The number of simulation runs (groups) in the dataset.
     """
 
@@ -93,7 +91,7 @@ class H5Dataset(Dataset):
         )
 
         # The number of simulation runs (groups) in the dataset
-        self.num_groups = len(self.group_names)
+        self.n_groups = len(self.group_names)
 
     def __len__(self) -> int:
         """

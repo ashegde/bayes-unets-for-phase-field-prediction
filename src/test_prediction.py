@@ -1,18 +1,22 @@
+"""
+In this module, we use the trained surrogate model to predict 
+simulation runs (with the coarsened time step).
+
+To do: incorporate UQ in a cost effective manner.
+"""
+
 import glob
 import os
-import pickle 
 
 import numpy as np
 import torch
-from torch.utils.data import DataLoader
 from torch.nn import MSELoss
 import torch.func as tf
 
 from pipeline.dataset.loaders import H5Dataset
 from pipeline.model.model import UNet2d
-from pipeline.inference.sampler import 
-from pipeline.inference.rollout import
-from simulator.simulator import CahnHilliardSimulator
+#from pipeline.inference.sampler import 
+from pipeline.inference.prediction import surrogate_run
 
 
 def load_model(path_to_model: str, device: torch.device) -> torch.nn.Module:
@@ -32,22 +36,24 @@ def load_model(path_to_model: str, device: torch.device) -> torch.nn.Module:
     out_channels = in_channels
     features = 16
 
-    model = UNet2d(
+    net = UNet2d(
         in_channels=in_channels,
         out_channels=out_channels,
         features=features,
     )
-    model.load_state_dict(
+    net.load_state_dict(
         torch.load(
             path_to_model,
             map_location=device,
             weights_only=True,
         )
     )
-    return model.to(device)
+    return net.to(device)
 
-
-
+def create_anim():
+    """
+    Creates animation of simulation and surrogate results.
+    """
 
 # Setup results directory
 results_path = 'results'
@@ -55,28 +61,22 @@ os.makedirs(results_path, exist_ok=True)
 
 # Load model
 path_to_model = glob.glob('model_*/checkpoint*.pt')[0]
-t_skip = int(path_to_model.split('_')[-1][:-3] )
+t_skip = int(path_to_model.split('_')[-1][:-3])
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 model = load_model(path_to_model=path_to_model, device=device)
+params = {k: v.detach() for k, v in model.named_parameters()}
 
 # Training loss function
 loss_fn = MSELoss(reduction='mean')
 
-# Load training and test datasets
-train_dataset = H5Dataset(path='data', mode='train', skip=t_skip)
-test_dataset = H5Dataset(path='data', mode='valid')
+# Load test dataset
+test_dataset = H5Dataset(path='data', mode='test')
 
-# Extract nominal model parameters
-params = {k: v.detach() for k, v in model.named_parameters()}
+# number of initial time steps to burn (CH dynamics too fast), hessian
+n_burn = 50
 
-# Wrappers for single point evaluations
-def model_single(params, x):
-    return tf.functional_call(model, params, (x.unsqueeze(0),)).squeeze(0)
-
-def loss_single(params, x, y):
-    pred = model_single(params, x)
-    return loss_fn(pred, y)
-
-#
-n_post_samples = 30
+for r in range(test_dataset.n_runs):
+    sim_times, sim_run = test_dataset.get_simulation(r)
+    dt = sim_times[1] - sim_times[0]
+    t_start = n_burn * dt 

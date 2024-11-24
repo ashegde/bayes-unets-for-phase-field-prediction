@@ -29,7 +29,17 @@ def main(args: argparse.Namespace) -> None:
     u_noise_scale = 0.5
 
     # Define the number of experiments for each mode
-    experiments = {'train': args.n_train, 'valid': args.n_valid, 'test': args.n_test}
+    experiments = {
+        'train': args.n_train,
+        'valid': args.n_valid,
+        'test': args.n_test,
+    }
+
+    experiment_durations = {
+        'train': args.n_steps_train,
+        'valid': args.n_steps_train,
+        'test': args.n_steps_test,
+    }
 
     # Initialize and save the Cahn-Hilliard simulator
     simulator = CahnHilliardSimulator(dt=args.dt)
@@ -53,7 +63,7 @@ def main(args: argparse.Namespace) -> None:
                 simulator.initialize(u=u[0])
 
                 # Run the simulation for the specified number of steps
-                for _ in range(args.n_steps):
+                for _ in range(experiment_durations[mode]):
                     u.append(simulator.step())  # Update concentration field
                     t.append(simulator.t)       # Record the current time
 
@@ -75,8 +85,8 @@ if __name__ == "__main__":
 
     # Dataset parameters
     parser.add_argument('--dt', type=float, default=1e-2, help='Integrator time step')
-    parser.add_argument('--n_steps', type=int, default=500, help='Number of time steps per simulation')
-
+    parser.add_argument('--n_steps_train', type=int, default=500, help='Number of time steps per simulation')
+    parser.add_argument('--n_steps_test', type=int, default=1000, help='Number of time steps per simulation')
     parser.add_argument('--n_train', type=int, default=50, help='Number of simulations for training')
     parser.add_argument('--n_valid', type=int, default=10, help='Number of simulations for validation')
     parser.add_argument('--n_test', type=int, default=50, help='Number of simulations for testing')

@@ -405,9 +405,9 @@ def estimate_precision(
     """
 
     norm_param = torch.sqrt(
-        torch.sum((v**2).sum() for _, v in base_params.items()),
+        sum((v**2).sum() for _, v in base_params.items()),
     )
-    n_params = torch.sum(v.numel() for _, v in base_params.items())
+    n_params = sum(v.numel() for _, v in base_params.items())
 
     # load cache if it exists, else precompute and save
     inv_jjt_cache = precompute_inv_jjt(
