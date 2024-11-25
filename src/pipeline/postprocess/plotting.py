@@ -102,6 +102,7 @@ def create_anim(
     sim_time: torch.Tensor,
     x_grid: np.ndarray,
     y_grid: np.ndarray,
+    save_path: str,
 ):
     """
     Creates animation of simulation and surrogate results.
@@ -152,5 +153,5 @@ def create_anim(
         )
         # writervideo = animation.FFMpegWriter(fps=args.animfps)
         # anim.save(args.animname, writer=writervideo)
-        anim.save(f'results_{i_sim}.gif')
+        anim.save(f'{save_path}/results_{i_sim}.gif')
         plt.close()

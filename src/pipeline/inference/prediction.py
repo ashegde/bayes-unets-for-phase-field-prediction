@@ -1,13 +1,8 @@
 """
 This module contains functionality for
 """
+from typing import Tuple, Callable
 
-import os
-import pickle
-from typing import Tuple, List, Callable, Dict
-
-import h5py
-import numpy as np
 import torch
 from torch import nn
 
@@ -17,7 +12,7 @@ from torch import nn
 # https://pytorch.org/tutorials/intermediate/ensembling.html
 
 def surrogate_run(
-    model: nn.Module,
+    model: nn.Module | Callable,
     u_start: torch.Tensor,
     t_start: float,
     t_final: float,

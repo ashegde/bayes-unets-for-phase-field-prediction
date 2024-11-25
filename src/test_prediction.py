@@ -17,6 +17,7 @@ from pipeline.dataset.loaders import H5Dataset
 from pipeline.model.model import UNet2d
 #from pipeline.inference.sampler import 
 from pipeline.inference.prediction import surrogate_run
+from pipeline.postprocess.plotting import create_anim
 
 
 def load_model(path_to_model: str, device: torch.device) -> torch.nn.Module:
@@ -50,10 +51,7 @@ def load_model(path_to_model: str, device: torch.device) -> torch.nn.Module:
     )
     return net.to(device)
 
-def create_anim():
-    """
-    Creates animation of simulation and surrogate results.
-    """
+
 
 # Setup results directory
 results_path = 'results'
@@ -63,9 +61,12 @@ os.makedirs(results_path, exist_ok=True)
 path_to_model = glob.glob('model_*/checkpoint*.pt')[0]
 t_skip = int(path_to_model.split('_')[-1][:-3])
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
 model = load_model(path_to_model=path_to_model, device=device)
-params = {k: v.detach() for k, v in model.named_parameters()}
+
+# Compile model
+compiled_model = torch.compile(model)
+
+# params = {k: v.detach() for k, v in model.named_parameters()}
 
 # Training loss function
 loss_fn = MSELoss(reduction='mean')
@@ -76,7 +77,37 @@ test_dataset = H5Dataset(path='data', mode='test')
 # number of initial time steps to burn (CH dynamics too fast), hessian
 n_burn = 50
 
-for r in range(test_dataset.n_runs):
-    sim_times, sim_run = test_dataset.get_simulation(r)
-    dt = sim_times[1] - sim_times[0]
+for sim_id in range(test_dataset.n_groups):
+    sim_time, sim_field = test_dataset.get_simulation(sim_id)
+    x_grid, y_grid = test_dataset.get_meshgrid(sim_id)
+    dt = sim_time[1] - sim_time[0]
+
+    # burn the first n_burn indices
     t_start = n_burn * dt 
+    u_start = sim_field[n_burn]
+    t_final = sim_time[-1]
+
+    # run the surrogate
+    surr_time, surr_field = surrogate_run(
+        compiled_model,
+        u_start,
+        t_start,
+        t_final,
+        dt,
+        t_skip,
+    )
+
+    # plot / animate the results
+    create_anim(
+        surr_field,
+        surr_time,
+        sim_field,
+        sim_time,
+        x_grid,
+        y_grid,
+        results_path,
+    )
+
+# For later, rather than looping over models with different parameter settings,
+# we can also vectorize using torch.func.stack_module_state and vmap.
+# https://pytorch.org/tutorials/intermediate/ensembling.html

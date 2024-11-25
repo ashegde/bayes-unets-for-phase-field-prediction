@@ -137,7 +137,8 @@ def main(args: argparse.Namespace) -> None:
 
     # Initialize model
     model = create_model(device)
-    
+    compiled_model = torch.compile(model)
+
     # Report the number of model parameters
     n_params = calculate_parameters(model)
     logging.info(f'Model size: {n_params} trainable parameters')
@@ -145,7 +146,7 @@ def main(args: argparse.Namespace) -> None:
     # Define loss function and optimizer
     loss_fn = MSELoss(reduction='mean')
     optimizer = optim.AdamW(
-        model.parameters(),
+        compiled_model.parameters(),
         lr=args.lr,
         weight_decay=args.weight_decay,
     )
@@ -165,12 +166,12 @@ def main(args: argparse.Namespace) -> None:
         logging.info(f'Epoch {epoch}/{args.n_epochs}, learning rate {epoch_lr}')
 
         # Training step
-        model.train()
+        compiled_model.train()
         for step, (xb, yb) in enumerate(train_loader):
             xb = xb.to(device)
             yb = yb.to(device)
             optimizer.zero_grad()
-            pred = model(xb)
+            pred = compiled_model(xb)
             loss = loss_fn(pred, yb)
             loss.backward()
             optimizer.step()
@@ -181,13 +182,13 @@ def main(args: argparse.Namespace) -> None:
 
         # Validation step
         if epoch % args.valid_freq == 0:
-            model.eval()
+            compiled_model.eval()
             valid_loss = []
             with torch.no_grad():
                 for xb, yb in valid_loader:
                     xb = xb.to(device)
                     yb = yb.to(device)
-                    pred = model(xb)
+                    pred = compiled_model(xb)
                     loss = loss_fn(pred, yb)
                     valid_loss.append(loss.item())
 
@@ -197,6 +198,8 @@ def main(args: argparse.Namespace) -> None:
 
             # Checkpoint best model so far
             if val_loss < min_val_loss:
+                # the compiled and uncompiled model share the same weights,
+                # so we will save the uncompiled model.
                 torch.save(model.state_dict(), f'{model_path}/checkpoint_model_tskip_{args.time_skip}.pt')
                 min_val_loss = val_loss
                 logging.info(f'Updated best model saved at {save_path}')
