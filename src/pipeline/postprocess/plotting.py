@@ -12,11 +12,11 @@ from matplotlib import animation
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 # plot settings
-cmap1 = cm.get_cmap('bwr')
+cmap1 = mpl.colormaps['bwr']
 normalizer1 = Normalize(-1.2, 1.2)
 cm_phase = cm.ScalarMappable(cmap=cmap1, norm=normalizer1)
 
-cmap2 = cm.get_cmap('inferno')
+cmap2 = mpl.colormaps['inferno']
 normalizer2 = Normalize(0, 2)
 cm_error = cm.ScalarMappable(cmap=cmap2, norm=normalizer2)
 
@@ -55,6 +55,7 @@ def align_surr_to_sim(
 def plot_states(
     fig: mpl.figure.Figure,
     axs: plt.Axes,
+    current_time: float,
     surr_field: np.ndarray,
     sim_field: np.ndarray,
     x_grid: np.ndarray,
@@ -73,7 +74,6 @@ def plot_states(
     divider = make_axes_locatable(axs[0,0])
     cax = divider.append_axes('right', size='5%', pad=0.05)
     fig.colorbar(cm_phase, cax=cax, orientation='vertical')
-
 
     axs[0, 1].contourf(x_grid, y_grid, sim_field, cmap=cmap1, norm=normalizer1)
     axs[0, 1].set_title('Simulation')
@@ -99,8 +99,8 @@ def create_anim(
     surr_time: torch.Tensor,
     sim_field: torch.Tensor,
     sim_time: torch.Tensor,
-    x_grid: np.ndarray,
-    y_grid: np.ndarray,
+    x_grid: torch.Tensor,
+    y_grid: torch.Tensor,
     save_path: str,
 ):
     """
@@ -109,6 +109,8 @@ def create_anim(
 
     # surr_field is of dimension (T_surr, C, H, W)
     # sim_field is of dimension (T_sim, C, H, W)
+    x_grid_np = x_grid.numpy()
+    y_grid_np = y_grid.numpy()
 
     # assuming a uniform time skip
     t_skip = surr_time[1]-surr_time[0]
@@ -124,26 +126,48 @@ def create_anim(
     fig, axs = plt.subplots(2, 2, figsize=(8, 8), sharex=True, sharey=True)
     fig.delaxes(axs[1, 1])
 
+    axs[0, 0].set_title('UNet')
+    axs[0, 0].set_xticks([])
+    axs[0, 0].set_yticks([])
+    divider = make_axes_locatable(axs[0, 0])
+    cax = divider.append_axes('right', size='5%', pad=0.05)
+    fig.colorbar(cm_phase, cax=cax, orientation='vertical')
+
+    axs[0, 1].set_title('Simulation')
+    axs[0, 1].set_xticks([])
+    axs[0, 1].set_yticks([])
+    divider = make_axes_locatable(axs[0,1])
+    cax = divider.append_axes('right', size='5%', pad=0.05)
+    fig.colorbar(cm_phase, cax=cax, orientation='vertical')
+
+    axs[1, 0].set_title(f'Absolute error')
+    axs[1, 0].set_xticks([])
+    axs[1, 0].set_yticks([])
+    divider = make_axes_locatable(axs[1,0])
+    cax = divider.append_axes('right', size='5%', pad=0.05)
+    fig.colorbar(cm_error, cax=cax, orientation='vertical')
+
     def animate(j):
         current_time = sim_time[j]
-        current_field_sim = sim_field[j].squeeze().numpy().cpu()
-        current_field_surr = padded_surr_field[j].squeeze().numpy().cpu()
+        current_field_sim = sim_field[j].squeeze().detach().numpy()
+        current_field_surr = padded_surr_field[j].squeeze().detach().numpy()
         title = f'Time = {current_time}, UNet skips {t_skip}s.'
-        plot_states(
-            fig,
-            axs,
-            current_field_surr,
-            current_field_sim,
-            x_grid,
-            y_grid,
-            title,
-        )
+        axs[0, 0].contourf(x_grid_np, y_grid_np, current_field_surr, cmap=cmap1, norm=normalizer1)
+        axs[0, 1].contourf(x_grid_np, y_grid_np, current_field_sim, cmap=cmap1, norm=normalizer1)
+        axs[1, 0].contourf(x_grid_np, y_grid_np, np.abs(current_field_sim-current_field_surr), cmap=cmap2, norm=normalizer2)
+        fig.suptitle(title)
 
-        # Render video
-        anim = animation.FuncAnimation(
-            fig, animate, frames=range(sim_time.size(0)), interval=20,
-        )
-        # writervideo = animation.FFMpegWriter(fps=args.animfps)
-        # anim.save(args.animname, writer=writervideo)
-        anim.save(save_path)
-        plt.close()
+
+    # Render video
+    from tqdm import tqdm
+    anim = animation.FuncAnimation(
+        fig, animate, frames=tqdm(range(sim_time.size(0))), interval=20
+    )
+    anim.save(save_path)
+    # anim.save(
+    #   filename=save_path,
+    #   fps=24,
+    #   extra_args=['-vcodec', 'libx264'],
+    #   dpi=300,
+    # )
+    plt.close()
