@@ -1,5 +1,8 @@
 """
-This module contains functionality for
+This module contains functionality for model prediction.
+
+Specifically, the function `surrogate_run` autoregressively
+predicts the field evolution across a specified time horizon.
 """
 from typing import Tuple, Callable
 
@@ -25,18 +28,16 @@ def surrogate_run(
     model.eval()
     device = next(model.parameters()).device
 
-    # assuming u_start is of dimension (B,C,H,W)
-    # where B = n_runs, and C = 1 for this problem.
-    # n_runs = u_start.size(0)
-    fields = [u_start.cpu()]
+    # assuming u_start is of dimension (C,H,W)
+    fields = [u_start.to(device)]
     times = [t_start]
 
     while times[-1] < t_final:
         xb = fields[-1].to(device)
-        prediction = model(xb)
-        fields.append(prediction.cpu())
+        prediction = model(xb[None,...])
+        fields.append(prediction[0])
         times.append(times[-1]+dt*t_skip)
 
-    fields = torch.stack(fields, dim=1) #(B, T, C, H, W)
+    fields = torch.stack(fields, dim=0).cpu() #(T, C, H, W)
     times = torch.tensor(times) #(T,)
     return times, fields

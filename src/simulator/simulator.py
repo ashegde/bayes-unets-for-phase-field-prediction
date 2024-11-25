@@ -170,6 +170,7 @@ class CahnHilliardSimulator:
                     consistent with the simulator's resolution.
         """
         self.u = u
+        self.t = 0.0
 
     def step(self) -> np.ndarray:
         """

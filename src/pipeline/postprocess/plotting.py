@@ -50,12 +50,11 @@ def align_surr_to_sim(
             padded_surr_field.append(surr_field[sidx])
     padded_surr_field = torch.stack(padded_surr_field, dim=0)
     return padded_surr_time, padded_surr_field
-    
+
 
 def plot_states(
     fig: mpl.figure.Figure,
     axs: plt.Axes,
-    current_time: float,
     surr_field: np.ndarray,
     sim_field: np.ndarray,
     x_grid: np.ndarray,
@@ -74,7 +73,7 @@ def plot_states(
     divider = make_axes_locatable(axs[0,0])
     cax = divider.append_axes('right', size='5%', pad=0.05)
     fig.colorbar(cm_phase, cax=cax, orientation='vertical')
-    
+
 
     axs[0, 1].contourf(x_grid, y_grid, sim_field, cmap=cmap1, norm=normalizer1)
     axs[0, 1].set_title('Simulation')
@@ -83,7 +82,7 @@ def plot_states(
     divider = make_axes_locatable(axs[0,1])
     cax = divider.append_axes('right', size='5%', pad=0.05)
     fig.colorbar(cm_phase, cax=cax, orientation='vertical')
-    
+
     mse = np.mean((sim_field-surr_field)**2)
     axs[1, 0].contourf(x_grid, y_grid, np.abs(sim_field-surr_field), cmap=cmap2, norm=normalizer2)
     axs[1, 0].set_title(f'Absolute error (mse = {mse:0.3f})')
@@ -93,7 +92,7 @@ def plot_states(
     cax = divider.append_axes('right', size='5%', pad=0.05)
     fig.colorbar(cm_error, cax=cax, orientation='vertical')
     fig.suptitle(title)
-    
+
 
 def create_anim(
     surr_field: torch.Tensor,
@@ -108,44 +107,37 @@ def create_anim(
     Creates animation of simulation and surrogate results.
     """
 
-    # surr_field is of dimension (B, T_surr, C, H, W)
-    # sim_field is of dimension (B, T_sim, C, H, W)
-    n_sims = surr_field.size(0)
-    assert n_sims == sim_field.size(0)
-
-    # align
+    # surr_field is of dimension (T_surr, C, H, W)
+    # sim_field is of dimension (T_sim, C, H, W)
 
     # assuming a uniform time skip
     t_skip = surr_time[1]-surr_time[0]
 
 
-    for i_sim in range(n_sims):
+    _, padded_surr_field = align_surr_to_sim(
+        surr_field,
+        surr_time,
+        sim_field,
+        sim_time,
+    )
 
-        _, padded_surr_field = align_surr_to_sim(
-            surr_field[i_sim],
-            surr_time,
-            sim_field[i_sim],
-            sim_time,
+    fig, axs = plt.subplots(2, 2, figsize=(8, 8), sharex=True, sharey=True)
+    fig.delaxes(axs[1, 1])
+
+    def animate(j):
+        current_time = sim_time[j]
+        current_field_sim = sim_field[j].squeeze().numpy().cpu()
+        current_field_surr = padded_surr_field[j].squeeze().numpy().cpu()
+        title = f'Time = {current_time}, UNet skips {t_skip}s.'
+        plot_states(
+            fig,
+            axs,
+            current_field_surr,
+            current_field_sim,
+            x_grid,
+            y_grid,
+            title,
         )
-
-        fig, axs = plt.subplots(2, 2, figsize=(8, 8), sharex=True, sharey=True)
-        fig.delaxes(axs[1, 1])
-     
-        def animate(j):
-            current_time = sim_time[j]
-            current_field_sim = sim_field[i_sim, j].squeeze().numpy()
-            current_field_surr = padded_surr_field[j].squeeze().numpy()
-            title = f'Time = {current_time}, UNet skips {t_skip}s.'
-            plot_states(
-                fig, 
-                axs,
-                current_time,
-                current_field_surr,
-                current_field_sim,
-                x_grid,
-                y_grid,
-                title,
-            )
 
         # Render video
         anim = animation.FuncAnimation(
@@ -153,5 +145,5 @@ def create_anim(
         )
         # writervideo = animation.FFMpegWriter(fps=args.animfps)
         # anim.save(args.animname, writer=writervideo)
-        anim.save(f'{save_path}/results_{i_sim}.gif')
+        anim.save(save_path)
         plt.close()

@@ -1,5 +1,5 @@
 """
-In this module, we use the trained surrogate model to predict 
+In this module, we use the trained surrogate model to predict
 simulation runs (with the coarsened time step).
 
 To do: incorporate UQ in a cost effective manner.
@@ -15,7 +15,7 @@ import torch.func as tf
 
 from pipeline.dataset.loaders import H5Dataset
 from pipeline.model.model import UNet2d
-#from pipeline.inference.sampler import 
+# from pipeline.inference.sampler import
 from pipeline.inference.prediction import surrogate_run
 from pipeline.postprocess.plotting import create_anim
 
@@ -52,7 +52,6 @@ def load_model(path_to_model: str, device: torch.device) -> torch.nn.Module:
     return net.to(device)
 
 
-
 # Setup results directory
 results_path = 'results'
 os.makedirs(results_path, exist_ok=True)
@@ -62,6 +61,7 @@ path_to_model = glob.glob('model_*/checkpoint*.pt')[0]
 t_skip = int(path_to_model.split('_')[-1][:-3])
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 model = load_model(path_to_model=path_to_model, device=device)
+model.eval()
 
 # Compile model
 compiled_model = torch.compile(model)
@@ -83,8 +83,8 @@ for sim_id in range(test_dataset.n_groups):
     dt = sim_time[1] - sim_time[0]
 
     # burn the first n_burn indices
-    t_start = n_burn * dt 
-    u_start = sim_field[n_burn]
+    t_start = n_burn * dt
+    u_start = sim_field[n_burn]# add channel dim
     t_final = sim_time[-1]
 
     # run the surrogate
@@ -98,6 +98,7 @@ for sim_id in range(test_dataset.n_groups):
     )
 
     # plot / animate the results
+    save_path = f'{results_path}/result_{sim_id}.gif'
     create_anim(
         surr_field,
         surr_time,
@@ -105,7 +106,7 @@ for sim_id in range(test_dataset.n_groups):
         sim_time,
         x_grid,
         y_grid,
-        results_path,
+        save_path,
     )
 
 # For later, rather than looping over models with different parameter settings,

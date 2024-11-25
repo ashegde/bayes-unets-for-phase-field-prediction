@@ -209,5 +209,6 @@ class H5Dataset(Dataset):
         ).to(self.dtype)
         field = torch.from_numpy(
             self.h5f[self.group_names[group_id]]['field_values'][:],
-        ).to(self.dtype)
-        return times, field
+        ).to(self.dtype) #(T, H, W)
+        # adding a channel dimension, for consistency
+        return times, field[:, None, :, :]

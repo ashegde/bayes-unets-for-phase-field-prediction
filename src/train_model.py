@@ -135,9 +135,8 @@ def main(args: argparse.Namespace) -> None:
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
     valid_loader = DataLoader(valid_dataset, batch_size=args.batch_size, shuffle=False)
 
-    # Initialize model
+   # Initialize model
     model = create_model(device)
-    compiled_model = torch.compile(model)
 
     # Report the number of model parameters
     n_params = calculate_parameters(model)
@@ -146,7 +145,7 @@ def main(args: argparse.Namespace) -> None:
     # Define loss function and optimizer
     loss_fn = MSELoss(reduction='mean')
     optimizer = optim.AdamW(
-        compiled_model.parameters(),
+        model.parameters(),
         lr=args.lr,
         weight_decay=args.weight_decay,
     )
@@ -159,6 +158,26 @@ def main(args: argparse.Namespace) -> None:
     )
 
     min_val_loss = float('inf')
+    
+    # Helper functions for training and validation
+    # In my experiments, it seems better to compile the entire training step
+    # rather than just the model. This issue also is raised in:
+    # https://discuss.pytorch.org/t/torch-compile-what-is-the-best-scope-of-compilation/185442
+
+    @torch.compile
+    def train_step(net: torch.nn.Module, x: torch.tensor, y: torch.tensor):
+        optimizer.zero_grad()
+        pred = net(x)
+        loss = loss_fn(pred, y)
+        loss.backward()
+        optimizer.step()
+        return loss
+
+    @torch.compile
+    def valid_step(net: torch.nn.Module, x: torch.tensor, y: torch.tensor):
+        pred = net(x)
+        loss = loss_fn(pred, y)
+        return loss
 
     # Training loop
     for epoch in range(args.n_epochs):
@@ -166,30 +185,25 @@ def main(args: argparse.Namespace) -> None:
         logging.info(f'Epoch {epoch}/{args.n_epochs}, learning rate {epoch_lr}')
 
         # Training step
-        compiled_model.train()
+        model.train()
         for step, (xb, yb) in enumerate(train_loader):
             xb = xb.to(device)
             yb = yb.to(device)
-            optimizer.zero_grad()
-            pred = compiled_model(xb)
-            loss = loss_fn(pred, yb)
-            loss.backward()
-            optimizer.step()
+            loss = train_step(model, xb, yb)
 
             # Log training loss
             if step % args.log_freq == 0:
                 logging.info(f'Train Step {step}/{len(train_loader)} - Loss: {loss.item()}')
 
         # Validation step
+        model.eval()
         if epoch % args.valid_freq == 0:
-            compiled_model.eval()
             valid_loss = []
             with torch.no_grad():
                 for xb, yb in valid_loader:
                     xb = xb.to(device)
                     yb = yb.to(device)
-                    pred = compiled_model(xb)
-                    loss = loss_fn(pred, yb)
+                    loss = valid_step(model, xb, yb)
                     valid_loss.append(loss.item())
 
             # Log validation loss
