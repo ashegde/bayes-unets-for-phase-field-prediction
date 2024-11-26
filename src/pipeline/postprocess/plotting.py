@@ -1,25 +1,13 @@
-"""
-This module contains helper functions for plotting and animating simulation and surrogate results.
-"""
 import copy
 import numpy as np
 import torch
+from tqdm import tqdm
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib.colors import Normalize
 import matplotlib.cm as cm
 from matplotlib import animation
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-
-# plot settings
-cmap1 = mpl.colormaps['bwr']
-normalizer1 = Normalize(-1.2, 1.2)
-cm_phase = cm.ScalarMappable(cmap=cmap1, norm=normalizer1)
-
-cmap2 = mpl.colormaps['inferno']
-normalizer2 = Normalize(0, 2)
-cm_error = cm.ScalarMappable(cmap=cmap2, norm=normalizer2)
-
 
 def align_surr_to_sim(
     surr_field: torch.Tensor,
@@ -36,8 +24,7 @@ def align_surr_to_sim(
 
     padded_surr_time = copy.deepcopy(sim_time)
     padded_surr_field = []
-
-    sidx = 0 # surrogate time index
+    sidx = 0  # surrogate time index
     for i, time in enumerate(sim_time.tolist()):
         if time < surr_time[0]:
             padded_surr_field.append(
@@ -50,48 +37,6 @@ def align_surr_to_sim(
             padded_surr_field.append(surr_field[sidx])
     padded_surr_field = torch.stack(padded_surr_field, dim=0)
     return padded_surr_time, padded_surr_field
-
-
-def plot_states(
-    fig: mpl.figure.Figure,
-    axs: plt.Axes,
-    current_time: float,
-    surr_field: np.ndarray,
-    sim_field: np.ndarray,
-    x_grid: np.ndarray,
-    y_grid: np.ndarray,
-    title: str,
-):
-
-    """
-    Plots result for a particular time step
-    """
-
-    axs[0, 0].contourf(x_grid, y_grid, surr_field, cmap=cmap1, norm=normalizer1)
-    axs[0, 0].set_title('UNet')
-    axs[0, 0].set_xticks([])
-    axs[0, 0].set_yticks([])
-    divider = make_axes_locatable(axs[0,0])
-    cax = divider.append_axes('right', size='5%', pad=0.05)
-    fig.colorbar(cm_phase, cax=cax, orientation='vertical')
-
-    axs[0, 1].contourf(x_grid, y_grid, sim_field, cmap=cmap1, norm=normalizer1)
-    axs[0, 1].set_title('Simulation')
-    axs[0, 1].set_xticks([])
-    axs[0, 1].set_yticks([])
-    divider = make_axes_locatable(axs[0,1])
-    cax = divider.append_axes('right', size='5%', pad=0.05)
-    fig.colorbar(cm_phase, cax=cax, orientation='vertical')
-
-    mse = np.mean((sim_field-surr_field)**2)
-    axs[1, 0].contourf(x_grid, y_grid, np.abs(sim_field-surr_field), cmap=cmap2, norm=normalizer2)
-    axs[1, 0].set_title(f'Absolute error (mse = {mse:0.3f})')
-    axs[1, 0].set_xticks([])
-    axs[1, 0].set_yticks([])
-    divider = make_axes_locatable(axs[1,0])
-    cax = divider.append_axes('right', size='5%', pad=0.05)
-    fig.colorbar(cm_error, cax=cax, orientation='vertical')
-    fig.suptitle(title)
 
 
 def create_anim(
@@ -113,8 +58,7 @@ def create_anim(
     y_grid_np = y_grid.numpy()
 
     # assuming a uniform time skip
-    t_skip = surr_time[1]-surr_time[0]
-
+    t_skip = surr_time[1] - surr_time[0]
 
     _, padded_surr_field = align_surr_to_sim(
         surr_field,
@@ -123,51 +67,121 @@ def create_anim(
         sim_time,
     )
 
-    fig, axs = plt.subplots(2, 2, figsize=(8, 8), sharex=True, sharey=True)
-    fig.delaxes(axs[1, 1])
+    time_np = sim_time.numpy()
+    sim_field_np = sim_field.squeeze().detach().numpy()
+    surr_field_np = padded_surr_field.squeeze().detach().numpy()
+    error_field_np = np.abs(sim_field_np - surr_field_np)
 
-    axs[0, 0].set_title('UNet')
+    # Setup and animate plots
+    cmap1 = mpl.colormaps['bwr']
+    normalizer1 = Normalize(-1.2, 1.2)
+    cm_phase = cm.ScalarMappable(cmap=cmap1, norm=normalizer1)
+
+    cmap2 = mpl.colormaps['inferno']
+    normalizer2 = Normalize(0, 2)
+    cm_error = cm.ScalarMappable(cmap=cmap2, norm=normalizer2)
+
+    plot_axs = [None, None, None]  # A list to hold contours for each subplot
+    fig, axs = plt.subplots(2, 2, figsize=(8, 8), sharex=True, sharey=True)
+    fig.delaxes(axs[1, 1])  # Remove unused subplot (1, 1)
+
+    # Plot for the first subplot (UNet)
+    axs[0, 0].set_title('UNet (time-coarsened)')
     axs[0, 0].set_xticks([])
     axs[0, 0].set_yticks([])
     divider = make_axes_locatable(axs[0, 0])
     cax = divider.append_axes('right', size='5%', pad=0.05)
     fig.colorbar(cm_phase, cax=cax, orientation='vertical')
+    plot_axs[0] = axs[0, 0].contourf(
+        x_grid_np,
+        y_grid_np,
+        surr_field_np[0],
+        cmap=cmap1,
+        norm=normalizer1,
+    )
 
+    # Plot for the second subplot (Simulation)
     axs[0, 1].set_title('Simulation')
     axs[0, 1].set_xticks([])
     axs[0, 1].set_yticks([])
-    divider = make_axes_locatable(axs[0,1])
+    divider = make_axes_locatable(axs[0, 1])
     cax = divider.append_axes('right', size='5%', pad=0.05)
     fig.colorbar(cm_phase, cax=cax, orientation='vertical')
+    plot_axs[1] = axs[0, 1].contourf(
+        x_grid_np,
+        y_grid_np,
+        sim_field_np[0],
+        cmap=cmap1,
+        norm=normalizer1,
+    )
 
-    axs[1, 0].set_title(f'Absolute error')
+    # Plot for the third subplot (Absolute error)
+    axs[1, 0].set_title('Absolute error')
     axs[1, 0].set_xticks([])
     axs[1, 0].set_yticks([])
-    divider = make_axes_locatable(axs[1,0])
+    divider = make_axes_locatable(axs[1, 0])
     cax = divider.append_axes('right', size='5%', pad=0.05)
     fig.colorbar(cm_error, cax=cax, orientation='vertical')
+    plot_axs[2] = axs[1, 0].contourf(
+        x_grid_np,
+        y_grid_np,
+        error_field_np[0],
+        cmap=cmap2,
+        norm=normalizer2,
+    )
 
-    def animate(j):
-        current_time = sim_time[j]
-        current_field_sim = sim_field[j].squeeze().detach().numpy()
-        current_field_surr = padded_surr_field[j].squeeze().detach().numpy()
-        title = f'Time = {current_time}, UNet skips {t_skip}s.'
-        axs[0, 0].contourf(x_grid_np, y_grid_np, current_field_surr, cmap=cmap1, norm=normalizer1)
-        axs[0, 1].contourf(x_grid_np, y_grid_np, current_field_sim, cmap=cmap1, norm=normalizer1)
-        axs[1, 0].contourf(x_grid_np, y_grid_np, np.abs(current_field_sim-current_field_surr), cmap=cmap2, norm=normalizer2)
+    # Function to animate the plots
+    def animate(frame):
+        # Remove old contour collections for all subplots
+        for p in plot_axs:
+            for tp in p.collections:
+                tp.remove()
+
+        # Update each subplot with new contours
+        plot_axs[0] = axs[0, 0].contourf(
+            x_grid_np,
+            y_grid_np,
+            surr_field_np[frame],
+            cmap=cmap1,
+            norm=normalizer1,
+        )
+        plot_axs[1] = axs[0, 1].contourf(
+            x_grid_np,
+            y_grid_np,
+            sim_field_np[frame],
+            cmap=cmap1,
+            norm=normalizer1,
+        )
+        plot_axs[2] = axs[1, 0].contourf(
+            x_grid_np,
+            y_grid_np,
+            error_field_np[frame],
+            cmap=cmap2,
+            norm=normalizer2,
+        )
+
+        # Update title with the current time
+        title = f'Time = {time_np[frame]:0.2f}, UNet skips {t_skip}s.'
         fig.suptitle(title)
 
+        # Return all collections for blitting
+        return sum([p.collections for p in plot_axs], [])
 
-    # Render video
-    from tqdm import tqdm
+    # Create the animation using FuncAnimation
     anim = animation.FuncAnimation(
-        fig, animate, frames=tqdm(range(sim_time.size(0))), interval=20
+        fig,
+        animate,
+        frames=range(time_np.size(0)),
+        interval=10,
+        blit=True,
+        repeat=False,
     )
-    anim.save(save_path)
-    # anim.save(
-    #   filename=save_path,
-    #   fps=24,
-    #   extra_args=['-vcodec', 'libx264'],
-    #   dpi=300,
-    # )
+
+    # Save the animation to the specified path
+    anim.save(
+        filename=save_path,
+        fps=24,
+        extra_args=['-vcodec', 'libx264'],
+        dpi=300,
+    )
     plt.close()
