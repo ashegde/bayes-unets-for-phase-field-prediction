@@ -11,6 +11,7 @@ import pickle
 
 import h5py
 import numpy as np
+from tqdm import tqdm
 
 from simulator.simulator import CahnHilliardSimulator
 
@@ -23,9 +24,6 @@ def main(args: argparse.Namespace) -> None:
     # Set a random seed for reproducibility
     seed_val = 2023
     np.random.seed(seed_val)
-
-    # Settings
-    u_noise_scale = args.init_scale
 
     # Define the number of experiments for each mode
     experiments = {
@@ -52,15 +50,15 @@ def main(args: argparse.Namespace) -> None:
 
         # Create an HDF5 file to store the simulation data
         with h5py.File(file_name, 'w') as h5f:
-            for ii in range(n_experiments):
+            for ii in tqdm(range(n_experiments), desc=f'{mode}'):
                 
                 # Work in progress -- initialization of concentration field.
                 # The choice of nominal concentration and noise strongly impacts
                 # the geometry of the phase field during its evolution. In an ML context,  
                 # this directly impacts the diversity of the training data.
-                
-                u0_nominal = (2.0*np.random.rand()-1.0) * np.ones(simulator.x_res, simulator.y_res)
-                u0_noise = 2.0*np.random.rand(simulator.x_res, simulator.y_res)-1.0
+
+                u0_nominal = (2.0*np.random.rand()-1.0) * np.ones((simulator.x_res, simulator.y_res))
+                u0_noise = args.init_noise_scale * (2.0*np.random.rand(simulator.x_res, simulator.y_res)-1.0)
                 u_init = np.clip(u0_nominal + u0_noise, -1.0, 1.0)
 
                 # Initialize concentration field and time lists
@@ -98,7 +96,7 @@ if __name__ == "__main__":
     parser.add_argument('--n_train', type=int, default=50, help='Number of simulations for training')
     parser.add_argument('--n_valid', type=int, default=10, help='Number of simulations for validation')
     parser.add_argument('--n_test', type=int, default=50, help='Number of simulations for testing')
-    parser.add_argument('--init_scale', type=float, default=0.1, help='noise scale for uniform random initial condition')
+    parser.add_argument('--init_noise_scale', type=float, default=0.1, help='noise scale for uniform random initial condition')
 
     # Parse arguments and run main function
     args = parser.parse_args()
