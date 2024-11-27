@@ -16,7 +16,7 @@ import torch.func as tf
 from pipeline.dataset.loaders import H5Dataset
 from pipeline.model.model import UNet2d
 # from pipeline.inference.sampler import
-from pipeline.inference.prediction import surrogate_run
+from pipeline.inference.prediction import run_surrogate
 from pipeline.postprocess.plotting import create_anim
 
 
@@ -84,11 +84,11 @@ for sim_id in range(test_dataset.n_groups):
 
     # burn the first n_burn indices
     t_start = n_burn * dt
-    u_start = sim_field[n_burn]# add channel dim
+    u_start = sim_field[n_burn]
     t_final = sim_time[-1]
 
-    # run the surrogate
-    surr_time, surr_field = surrogate_run(
+    # run the surrogate at the specified settings
+    surr_time, surr_field = run_surrogate(
         compiled_model,
         u_start,
         t_start,

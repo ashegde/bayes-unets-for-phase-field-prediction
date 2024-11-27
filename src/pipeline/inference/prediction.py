@@ -14,7 +14,7 @@ from torch import nn
 # we can also vectorize using torch.func.stack_module_state and vmap.
 # https://pytorch.org/tutorials/intermediate/ensembling.html
 
-def surrogate_run(
+def run_surrogate(
     model: nn.Module | Callable,
     u_start: torch.Tensor,
     t_start: float,
