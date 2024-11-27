@@ -216,7 +216,7 @@ def main(args: argparse.Namespace) -> None:
                 # so we will save the uncompiled model.
                 torch.save(model.state_dict(), f'{model_path}/checkpoint_model_tskip_{args.time_skip}.pt')
                 min_val_loss = val_loss
-                logging.info(f'Updated best model saved at {save_path}')
+                logging.info(f'Checkpointing a new best model...')
 
             # Adjust learning rate
             scheduler.step(val_loss)

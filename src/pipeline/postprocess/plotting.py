@@ -171,7 +171,7 @@ def create_anim(
     anim = animation.FuncAnimation(
         fig,
         animate,
-        frames=range(time_np.size(0)),
+        frames=range(time_np.size),
         interval=10,
         blit=True,
         repeat=False,
