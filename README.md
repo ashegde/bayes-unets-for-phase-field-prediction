@@ -21,6 +21,8 @@ The first command builds a training, validation, and test dataset using the simu
 An example result is shown below.
 
 
+https://github.com/user-attachments/assets/cc8f79d9-6543-4d02-814f-11df1d76d898
+
 
 It is interesting to observe, in this and other examples, that the surrogate retains plausible physical behavior (at least with respect to the eyeball norm), even when deviating from the underlying physics. Naturally, this is also alarming and it demonstrates that failures can occur with no clear signal. 
 
