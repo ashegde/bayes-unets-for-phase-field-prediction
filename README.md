@@ -22,11 +22,13 @@ An example result is shown below.
 
 
 
+It is interesting to observe, in this and other examples, that the surrogate retains plausible physical behavior (at least with respect to the eyeball norm), even when deviating from the underlying physics. Naturally, this is also alarming and it demonstrates that failures can occur with no clear signal. 
+
 Work in progress: incorporating uncertainty quantification using the strategies described in the reference below:
 
 (1) Miani, Marco, Hrittik Roy, and Søren Hauberg. "Bayes without Underfitting:
 Fully Correlated Deep Learning Posteriors via Alternating Projections."
 arXiv preprint arXiv:2410.16901 (2024).
 
-At the moment, I am finding that my current (and not working :( ) implementation -- which can be found in the `pipelines/sampling` folder -- is still quite costly. This is primarily due to iterating over the training dataset (in batches) during each cycle of
-the alternating projections algorithm. As computational cost is always an issue, I am also curious if other strategies such as "evidential deep learning" can be useful. From an initial reading, it seems like such an approach would not handle epistemic uncertainty.
+While this is aspect currently unfinished, the code can be found in the pipelines/sampling`folder. The main challenge is the computational cost, which is exacerbated by the fact that I am currently using the free edition of google colab. The cost arises due to iterating over the training dataset (in batches) during each cycle of
+the alternating projections algorithm. Time permitting, it would also be interesting to incorporate other strategies for UQ, such as "evidential deep learning". While these methods are not strictly ``Bayesian'' and do not necessarily account for model/parameter uncertainty, they may still be practically useful -- e.g., in understanding when the model is less confident and may deviate from the underlying physics.
